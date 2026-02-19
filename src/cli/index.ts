@@ -6,6 +6,9 @@
 
 import { Command } from 'commander';
 import { VERSION } from '../index.js';
+import { registerAgentCommand } from './commands/agent.js';
+import { registerConfigCommand } from './commands/config.js';
+import { registerAuthCommand } from './commands/auth.js';
 
 const program = new Command();
 
@@ -21,6 +24,11 @@ program
   .action(() => {
     console.log('Hello from doppelgesicht CLI!');
   });
+
+// 서브커맨드 등록
+registerAgentCommand(program);
+registerConfigCommand(program);
+registerAuthCommand(program);
 
 // 명령어 파싱
 program.parse();

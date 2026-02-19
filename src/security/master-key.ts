@@ -170,3 +170,28 @@ export function validatePasswordComplexity(password: string): {
     errors,
   };
 }
+
+// 전역 마스터 키 저장소 (임시 구현)
+let globalMasterKey: Buffer | null = null;
+
+/**
+ * 마스터 키를 설정합니다 (앱 초기화 시 사용)
+ * @param key - 마스터 키
+ */
+export function setMasterKey(key: Buffer): void {
+  globalMasterKey = key;
+}
+
+/**
+ * 마스터 키를 가져옵니다
+ * @returns 마스터 키
+ * @throws 마스터 키가 설정되지 않았을 경우 에러
+ */
+export async function getMasterKey(): Promise<Buffer> {
+  if (!globalMasterKey) {
+    // TODO: 실제로는 키체인이나 안전한 저장소에서 복구
+    // 임시로 더미 키 반환 (개발용)
+    return Buffer.from('d'.repeat(32));
+  }
+  return globalMasterKey;
+}

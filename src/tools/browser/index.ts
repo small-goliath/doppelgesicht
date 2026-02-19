@@ -1,4 +1,4 @@
-//**
+/**
  * Browser 샌드박스 모듈
  * @description 2계층 검증: Layer 1 (정적 분석 + isolated-vm), Layer 2 (Playwright CDP)
  */
