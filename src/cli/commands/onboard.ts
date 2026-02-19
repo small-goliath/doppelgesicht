@@ -208,6 +208,7 @@ class OnboardWizard {
     const providerOptions: { value: LLMProvider; label: string; hint?: string }[] = [
       { value: 'anthropic', label: 'Anthropic (Claude)', hint: '권장' },
       { value: 'openai', label: 'OpenAI (GPT)' },
+      { value: 'moonshot', label: 'Moonshot (Kimi)' },
     ];
     const provider = await p.select({
       message: 'LLM 제공자를 선택하세요:',
@@ -219,8 +220,21 @@ class OnboardWizard {
     }
 
     // API 키 입력
+    const getProviderLabel = (p: LLMProvider) => {
+      switch (p) {
+        case 'anthropic':
+          return 'Anthropic';
+        case 'openai':
+          return 'OpenAI';
+        case 'moonshot':
+          return 'Moonshot';
+        default:
+          return p;
+      }
+    };
+
     const apiKey = await p.password({
-      message: `${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API 키를 입력하세요:`,
+      message: `${getProviderLabel(provider)} API 키를 입력하세요:`,
       validate: (value) => {
         if (!value || value.length < 10) {
           return '유효한 API 키를 입력하세요';
@@ -230,6 +244,9 @@ class OnboardWizard {
         }
         if (provider === 'openai' && !value.startsWith('sk-')) {
           return 'OpenAI API 키는 sk-로 시작해야 합니다';
+        }
+        if (provider === 'moonshot' && !value.startsWith('sk-')) {
+          return 'Moonshot API 키는 sk-로 시작해야 합니다';
         }
         return undefined;
       },
@@ -274,11 +291,16 @@ class OnboardWizard {
         const { AnthropicClient } = await import('../../llm/anthropic.js');
         const client = new AnthropicClient({ provider: 'anthropic', apiKey }, this.logger);
         return await client.healthCheck().then(h => h.healthy);
-      } else {
+      } else if (provider === 'openai') {
         const { OpenAIClient } = await import('../../llm/openai.js');
         const client = new OpenAIClient({ provider: 'openai', apiKey }, this.logger);
         return await client.healthCheck().then(h => h.healthy);
+      } else if (provider === 'moonshot') {
+        const { MoonshotClient } = await import('../../llm/moonshot.js');
+        const client = new MoonshotClient({ provider: 'moonshot', apiKey }, this.logger);
+        return await client.validateKey();
       }
+      return false;
     } catch {
       return false;
     }
@@ -288,18 +310,27 @@ class OnboardWizard {
    * 모델 선택
    */
   private async selectModel(provider: LLMProvider): Promise<string> {
-    const models =
-      provider === 'anthropic'
-        ? [
-            { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', hint: '가장 강력한 모델' },
-            { value: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet', hint: '권장' },
-            { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', hint: '빠른 응답' },
-          ]
-        : [
-            { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', hint: '가장 강력한 모델' },
-            { value: 'gpt-4', label: 'GPT-4', hint: '권장' },
-            { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', hint: '빠른 응답' },
-          ];
+    let models: { value: string; label: string; hint?: string }[];
+
+    if (provider === 'anthropic') {
+      models = [
+        { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', hint: '가장 강력한 모델' },
+        { value: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet', hint: '권장' },
+        { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', hint: '빠른 응답' },
+      ];
+    } else if (provider === 'moonshot') {
+      models = [
+        { value: 'moonshot-v1-8k', label: 'Moonshot v1 8K', hint: '기본' },
+        { value: 'moonshot-v1-32k', label: 'Moonshot v1 32K', hint: '긴 컨텍스트' },
+        { value: 'moonshot-v1-128k', label: 'Moonshot v1 128K', hint: '매우 긴 컨텍스트' },
+      ];
+    } else {
+      models = [
+        { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', hint: '가장 강력한 모델' },
+        { value: 'gpt-4', label: 'GPT-4', hint: '권장' },
+        { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', hint: '빠른 응답' },
+      ];
+    }
 
     const model = await p.select({
       message: '사용할 모델을 선택하세요:',

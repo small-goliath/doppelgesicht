@@ -9,6 +9,8 @@ import { pc } from '../../utils/colors.js';
 import { AuthProfileManager } from '../../core/auth-profile.js';
 import { getMasterKey } from '../../security/master-key.js';
 import type { LLMProvider, AuthType, CreateAuthProfileInput } from '../../types/auth.js';
+import { MoonshotClient } from '../../llm/moonshot.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * 프로파일 목록 표시
@@ -39,7 +41,12 @@ async function handleAuthList(): Promise<void> {
 
     for (const profile of profiles) {
       const statusIcon = profile.isActive ? pc.green('●') : pc.gray('○');
-      const providerColor = profile.provider === 'anthropic' ? pc.yellow : pc.green;
+      const providerColor =
+        profile.provider === 'anthropic'
+          ? pc.yellow
+          : profile.provider === 'openai'
+            ? pc.green
+            : pc.cyan;
       const healthColor =
         profile.health.status === 'healthy'
           ? pc.green
@@ -99,6 +106,7 @@ async function handleAuthAdd(): Promise<void> {
       options: [
         { value: 'anthropic', label: 'Anthropic (Claude)' },
         { value: 'openai', label: 'OpenAI (GPT)' },
+        { value: 'moonshot', label: 'Moonshot (Kimi)' },
       ],
     });
 
@@ -137,7 +145,11 @@ async function handleAuthAdd(): Promise<void> {
 
       const baseUrl = await p.text({
         message: 'API 엔드포인트 (선택사항):',
-        placeholder: provider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com',
+        placeholder: provider === 'anthropic'
+          ? 'https://api.anthropic.com'
+          : provider === 'openai'
+            ? 'https://api.openai.com'
+            : 'https://api.moonshot.cn/v1',
       });
 
       if (p.isCancel(baseUrl)) {
@@ -197,6 +209,33 @@ async function handleAuthAdd(): Promise<void> {
 
       if (!p.isCancel(requestsPerMinute)) {
         rateLimits.requestsPerMinute = parseInt(requestsPerMinute as string, 10);
+      }
+    }
+
+    // API 키 검증 (moonshot 제공자)
+    if (provider === 'moonshot') {
+      const validateSpinner = p.spinner();
+      validateSpinner.start('API 키를 검증하는 중...');
+
+      const isValid = await validateApiKey(
+        provider as LLMProvider,
+        credentials.apiKey,
+        credentials.baseUrl
+      );
+
+      if (isValid) {
+        validateSpinner.stop('API 키가 유효합니다.');
+      } else {
+        validateSpinner.stop('API 키 검증에 실패했습니다.');
+        const continueAnyway = await p.confirm({
+          message: '계속 진행하시겠습니까?',
+          initialValue: false,
+        });
+
+        if (!continueAnyway || p.isCancel(continueAnyway)) {
+          p.outro('취소되었습니다.');
+          return;
+        }
       }
     }
 
@@ -305,6 +344,65 @@ async function handleAuthTest(_id?: string): Promise<void> {
     spinner.stop('테스트 실패');
     p.log.error(`오류: ${(error as Error).message}`);
     process.exit(1);
+  }
+}
+
+/**
+ * API 키 검증
+ * @param provider - LLM 제공자
+ * @param apiKey - API 키
+ * @param baseUrl - API 엔드포인트 (선택사항)
+ * @returns 검증 성공 여부
+ */
+async function validateApiKey(
+  provider: LLMProvider,
+  apiKey: string,
+  baseUrl?: string
+): Promise<boolean> {
+  try {
+    // 간단한 logger 생성
+    const logger: ILogger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      setLevel: () => {},
+      child: () => logger,
+      close: async () => {},
+    };
+
+    switch (provider) {
+      case 'moonshot': {
+        const client = new MoonshotClient(
+          { provider: 'moonshot', apiKey, baseURL: baseUrl },
+          logger
+        );
+        return await client.validateKey();
+      }
+      // 다른 제공자는 healthCheck로 검증
+      case 'anthropic': {
+        const { AnthropicClient } = await import('../../llm/anthropic.js');
+        const client = new AnthropicClient(
+          { provider: 'anthropic', apiKey, baseURL: baseUrl },
+          logger
+        );
+        const health = await client.healthCheck();
+        return health.healthy;
+      }
+      case 'openai': {
+        const { OpenAIClient } = await import('../../llm/openai.js');
+        const client = new OpenAIClient(
+          { provider: 'openai', apiKey, baseURL: baseUrl },
+          logger
+        );
+        const health = await client.healthCheck();
+        return health.healthy;
+      }
+      default:
+        return false;
+    }
+  } catch {
+    return false;
   }
 }
 
