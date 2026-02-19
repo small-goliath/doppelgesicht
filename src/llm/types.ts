@@ -167,6 +167,11 @@ export interface ILLMClient {
    * 사용 가능한 모델 목록
    */
   listModels(): Promise<string[]>;
+
+  /**
+   * API 키 검증
+   */
+  validateKey(): Promise<boolean>;
 }
 
 /**

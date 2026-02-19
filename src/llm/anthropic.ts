@@ -211,6 +211,28 @@ export class AnthropicClient implements ILLMClient {
   }
 
   /**
+   * API 키 검증
+   */
+  async validateKey(): Promise<boolean> {
+    try {
+      // 간단한 API 호출로 키 검증
+      await this.client.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'Hi' }],
+      });
+      return true;
+    } catch (error) {
+      // 401 에러는 키가 유효하지 않음을 의미
+      if (error instanceof Anthropic.APIError && error.status === 401) {
+        return false;
+      }
+      // 다른 에러는 네트워크 등의 문제이므로 true 반환 (키 자체는 유효할 수 있음)
+      return true;
+    }
+  }
+
+  /**
    * 메시지 변환 (내부 형식 -> Anthropic)
    */
   private convertMessages(messages: ChatMessage[]): Anthropic.Messages.MessageParam[] {

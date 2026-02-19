@@ -241,6 +241,24 @@ export class OpenAIClient implements ILLMClient {
   }
 
   /**
+   * API 키 검증
+   */
+  async validateKey(): Promise<boolean> {
+    try {
+      // 모델 목록 API로 키 검증
+      await this.client.models.list();
+      return true;
+    } catch (error) {
+      // 401 에러는 키가 유효하지 않음을 의미
+      if (error instanceof OpenAI.APIError && error.status === 401) {
+        return false;
+      }
+      // 다른 에러는 네트워크 등의 문제이므로 true 반환 (키 자체는 유효할 수 있음)
+      return true;
+    }
+  }
+
+  /**
    * 메시지 변환 (내부 형식 -> OpenAI)
    */
   private convertMessages(
