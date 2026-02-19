@@ -31,6 +31,7 @@ import type {
   ChannelSendRequest,
   ModelInfo,
 } from './types.js';
+import { executeWithFallback } from '../llm/index.js';
 
 /**
  * Gateway 서버 클래스
@@ -192,17 +193,51 @@ export class GatewayServer {
   /**
    * 헬스 체크 핸들러
    */
-  private handleHealth(_req: Request, res: Response): void {
-    const status: ServerStatus = {
-      status: 'healthy',
+  private async handleHealth(_req: Request, res: Response): Promise<void> {
+    // LLM 클라이언트 상태 확인
+    const llmClientStatuses: Array<{ id: string; provider: string; healthy: boolean; latency?: number; error?: string }> = [];
+    let hasHealthyLLM = false;
+
+    for (const client of this.llmClients) {
+      try {
+        const health = await client.healthCheck();
+        llmClientStatuses.push({
+          id: client.id,
+          provider: client.provider,
+          healthy: health.healthy,
+          latency: health.latency,
+          error: health.error,
+        });
+        if (health.healthy) {
+          hasHealthyLLM = true;
+        }
+      } catch (error) {
+        llmClientStatuses.push({
+          id: client.id,
+          provider: client.provider,
+          healthy: false,
+          error: (error as Error).message,
+        });
+      }
+    }
+
+    // 전체 상태 결정
+    let status: ServerStatus['status'] = 'healthy';
+    if (llmClientStatuses.length > 0 && !hasHealthyLLM) {
+      status = 'degraded';
+    }
+
+    const serverStatus: ServerStatus = {
+      status,
       http: this.httpServer !== null,
       websocket: this.wsServer !== null,
       connections: this.clients.size,
       startedAt: this.startedAt.toISOString(),
       version: '1.0.0',
+      llmClients: llmClientStatuses,
     };
 
-    res.json(this.createSuccessResponse(status));
+    res.json(this.createSuccessResponse(serverStatus));
   }
 
   /**
@@ -243,6 +278,24 @@ export class GatewayServer {
       {
         id: 'gpt-3.5-turbo',
         owned_by: 'openai',
+        created: 1708905600,
+        permission: [],
+      },
+      {
+        id: 'moonshot-v1-8k',
+        owned_by: 'moonshot',
+        created: 1708905600,
+        permission: [],
+      },
+      {
+        id: 'moonshot-v1-32k',
+        owned_by: 'moonshot',
+        created: 1708905600,
+        permission: [],
+      },
+      {
+        id: 'moonshot-v1-128k',
+        owned_by: 'moonshot',
         created: 1708905600,
         permission: [],
       },
@@ -294,23 +347,54 @@ export class GatewayServer {
     const completionId = `chatcmpl-${randomUUID()}`;
     const created = Math.floor(Date.now() / 1000);
 
-    try {
-      // 첫 번째 클라이언트로 스트리밍 요청
-      const client = this.llmClients[0];
-      if (!client) {
-        res.write(`data: ${JSON.stringify({ error: 'No LLM client available' })}\n\n`);
-        res.end();
-        return;
+    // Fallback 체인으로 스트리밍 시도
+    let successfulClient: ILLMClient | null = null;
+    let stream: AsyncGenerator<{ content: string; isComplete?: boolean }> | null = null;
+    const attempts: Array<{ clientId: string; provider: string; success: boolean; error?: string }> = [];
+
+    for (const client of this.llmClients) {
+      try {
+        this.logger.debug(`Trying streaming with client: ${client.id}`);
+        stream = client.streamChatCompletion({
+          model: body.model,
+          messages: body.messages,
+          maxTokens: body.max_tokens,
+          temperature: body.temperature,
+          tools: body.tools,
+        });
+        successfulClient = client;
+        attempts.push({
+          clientId: client.id,
+          provider: client.provider,
+          success: true,
+        });
+        break;
+      } catch (error) {
+        const errorMessage = (error as Error).message;
+        this.logger.warn(`Streaming client ${client.id} failed`, { error: errorMessage });
+        attempts.push({
+          clientId: client.id,
+          provider: client.provider,
+          success: false,
+          error: errorMessage,
+        });
       }
+    }
 
-      const stream = await client.streamChatCompletion({
-        model: body.model,
-        messages: body.messages,
-        maxTokens: body.max_tokens,
-        temperature: body.temperature,
-        tools: body.tools,
-      });
+    if (!successfulClient || !stream) {
+      this.logger.error('All streaming clients failed', undefined, { attempts });
+      res.write(`data: ${JSON.stringify({ error: 'All LLM clients failed' })}\n\n`);
+      res.end();
+      return;
+    }
 
+    this.logger.debug('Streaming started successfully', {
+      provider: successfulClient.provider,
+      clientId: successfulClient.id,
+      attempts: attempts.length,
+    });
+
+    try {
       for await (const chunk of stream) {
         const responseChunk: ChatCompletionChunk = {
           id: completionId,
@@ -348,19 +432,41 @@ export class GatewayServer {
     body: ChatCompletionRequest,
     _requestId: string
   ): Promise<void> {
-    const client = this.llmClients[0];
-    if (!client) {
-      res.status(503).json(this.createErrorResponse('NO_CLIENT', 'No LLM client available'));
+    // Fallback 체인으로 요청 실행
+    const fallbackResult = await executeWithFallback(
+      this.llmClients,
+      (client) => client.chatCompletion({
+        model: body.model,
+        messages: body.messages,
+        maxTokens: body.max_tokens,
+        temperature: body.temperature,
+        tools: body.tools,
+      }),
+      this.logger
+    );
+
+    if (!fallbackResult.success || !fallbackResult.result) {
+      this.logger.error('All LLM clients failed', fallbackResult.error as Error, {
+        attempts: fallbackResult.attempts,
+      });
+      res.status(503).json(this.createErrorResponse(
+        'ALL_CLIENTS_FAILED',
+        'All LLM clients failed to generate completion'
+      ));
       return;
     }
 
-    const result = await client.chatCompletion({
-      model: body.model,
-      messages: body.messages,
-      maxTokens: body.max_tokens,
-      temperature: body.temperature,
-      tools: body.tools,
-    });
+    const result = fallbackResult.result;
+
+    // 사용된 클라이언트 로깅
+    const successfulAttempt = fallbackResult.attempts.find(a => a.success);
+    if (successfulAttempt) {
+      this.logger.debug('Chat completion successful', {
+        provider: successfulAttempt.provider,
+        clientId: successfulAttempt.clientId,
+        attempts: fallbackResult.attempts.length,
+      });
+    }
 
     const response: ChatCompletionResponse = {
       id: `chatcmpl-${randomUUID()}`,

@@ -266,6 +266,22 @@ export interface GatewayServerConfig {
 }
 
 /**
+ * LLM 클라이언트 상태
+ */
+export interface LLMClientStatus {
+  /** 클라이언트 ID */
+  id: string;
+  /** 제공자 */
+  provider: string;
+  /** 상태 */
+  healthy: boolean;
+  /** 지연 시간 (ms) */
+  latency?: number;
+  /** 에러 메시지 */
+  error?: string;
+}
+
+/**
  * 서버 상태
  */
 export interface ServerStatus {
@@ -281,4 +297,6 @@ export interface ServerStatus {
   startedAt: string;
   /** 버전 */
   version: string;
+  /** LLM 클라이언트 상태 목록 */
+  llmClients?: LLMClientStatus[];
 }
