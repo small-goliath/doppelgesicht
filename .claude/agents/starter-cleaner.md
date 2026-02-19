@@ -1,7 +1,6 @@
 ---
 name: starter-cleaner
 description: Use this agent when you need to initialize a Next.js starter kit for actual development by removing unnecessary boilerplate code and optimizing the project structure. This agent should be used at the beginning of a new project to clean up the starter template and prepare it for real development work. Examples:\n\n<example>\nContext: User wants to start a new Next.js project from a starter template\nuser: "Next.js 스타터킷을 실제 개발을 위해 초기화해주세요"\nassistant: "I'll use the starter-cleaner agent to clean up the starter kit and prepare it for actual development"\n<commentary>\nSince the user wants to initialize a Next.js project for real development, use the Task tool to launch the starter-cleaner agent.\n</commentary>\n</example>\n\n<example>\nContext: User has cloned a Next.js starter template with demo content\nuser: "이 프로젝트에서 불필요한 예제 코드들을 모두 제거하고 깨끗하게 만들어주세요"\nassistant: "I'll use the starter-cleaner agent to systematically remove all unnecessary code and optimize the project"\n<commentary>\nThe user needs to clean up a starter template, so use the starter-cleaner agent to perform systematic cleanup.\n</commentary>\n</example>
-model: sonnet
 color: red
 ---
 

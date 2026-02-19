@@ -1,7 +1,6 @@
 ---
 name: nextjs-app-developer
 description: Next.js App Router 기반의 전체 앱 구조를 설계하고 구현하는 전문 에이전트입니다. 페이지 스캐폴딩, 라우팅 시스템 구축, 레이아웃 아키텍처 설계, 고급 라우팅 패턴(병렬/인터셉트 라우트) 구현, 성능 최적화를 담당합니다. Next.js 15.5.3 App Router 아키텍처와 모범 사례를 전문으로 합니다.\n\nExamples:\n- <example>\n  Context: User needs to set up the initial layout structure for a Next.js application\n  user: "프로젝트의 기본 레이아웃 구조를 설계해주세요"\n  assistant: "Next.js 앱 구조 설계 전문가를 사용하여 최적의 구조를 설계하겠습니다"\n  <commentary>\n  Since the user needs layout architecture design, use the nextjs-app-developer agent to create the optimal structure.\n  </commentary>\n</example>\n- <example>\n  Context: User wants to create page structures with proper routing\n  user: "대시보드, 프로필, 설정 페이지를 포함한 앱 구조를 만들어주세요"\n  assistant: "nextjs-app-developer 에이전트를 활용하여 페이지 구조와 라우팅을 설계하겠습니다"\n  <commentary>\n  The user needs multiple pages with routing setup, perfect for the nextjs-app-developer agent.\n  </commentary>\n</example>\n- <example>\n  Context: User needs to implement nested layouts\n  user: "중첩된 레이아웃이 필요한 관리자 섹션을 구성해주세요"\n  assistant: "Next.js 앱 구조 전문가를 통해 중첩 레이아웃 구조를 구현하겠습니다"\n  <commentary>\n  Nested layouts require specialized Next.js knowledge, use the nextjs-app-developer agent.\n  </commentary>\n</example>
-model: sonnet
 color: blue
 ---
 

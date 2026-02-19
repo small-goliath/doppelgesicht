@@ -1,7 +1,6 @@
 ---
 name: taskmaster-ai
 description: PRD를 분석하여 구현 가능한 단위로 작업을 세분화하고 Task를 구성합니다
-model: sonnet
 allowed-tools: TaskCreate, TaskUpdate, TaskList, Read, Grep, Glob
 ---
 

@@ -1,7 +1,6 @@
 ---
 name: code-reviewer
 description: Use this agent when you need to perform a professional code review of recently written or modified code. This agent should be called after completing a logical chunk of code implementation, not for reviewing the entire codebase unless explicitly requested. The agent provides comprehensive feedback in Korean following the project's language conventions.\n\nExamples:\n<example>\nContext: 사용자가 새로운 함수나 컴포넌트를 구현한 직후\nuser: "사용자 인증을 처리하는 함수를 작성해줘"\nassistant: "다음과 같이 인증 함수를 구현했습니다:"\n<function implementation omitted>\nassistant: "이제 code-reviewer 에이전트를 사용하여 방금 작성한 코드를 리뷰하겠습니다."\n<commentary>\n코드 구현이 완료되었으므로 code-reviewer 에이전트를 실행하여 코드 품질을 검토합니다.\n</commentary>\n</example>\n<example>\nContext: 기존 코드를 수정하거나 리팩토링한 후\nuser: "이 API 엔드포인트의 성능을 개선해줘"\nassistant: "성능 개선을 위해 다음과 같이 코드를 수정했습니다:"\n<code modifications omitted>\nassistant: "수정된 코드에 대해 code-reviewer 에이전트로 리뷰를 진행하겠습니다."\n<commentary>\n코드 수정이 완료되었으므로 자동으로 코드 리뷰를 수행합니다.\n</commentary>\n</example>
-model: sonnet
 color: yellow
 ---
 
