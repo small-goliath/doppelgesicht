@@ -8,7 +8,7 @@ import type { Logger } from '../logging/index.js';
 /**
  * LLM 제공자 타입
  */
-export type LLMProvider = 'anthropic' | 'openai' | 'bedrock' | 'ollama';
+export type LLMProvider = 'anthropic' | 'openai' | 'moonshot' | 'bedrock' | 'ollama';
 
 /**
  * 메시지 역할

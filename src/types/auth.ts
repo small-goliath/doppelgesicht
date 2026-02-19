@@ -5,7 +5,7 @@
 /**
  * LLM 제공자 타입
  */
-export type LLMProvider = 'anthropic' | 'openai';
+export type LLMProvider = 'anthropic' | 'openai' | 'moonshot';
 
 /**
  * 인증 방식 타입

@@ -20,10 +20,12 @@ export type {
 
 export { AnthropicClient, LLMError } from './anthropic.js';
 export { OpenAIClient, OpenAIError } from './openai.js';
+export { MoonshotClient, MoonshotError } from './moonshot.js';
 
 import type { ILLMClient, LLMClientConfig, LLMProvider } from './types.js';
 import { AnthropicClient } from './anthropic.js';
 import { OpenAIClient } from './openai.js';
+import { MoonshotClient } from './moonshot.js';
 import type { Logger } from '../logging/index.js';
 
 interface FallbackResult<T> {
@@ -50,6 +52,8 @@ export function createLLMClient(
       return new AnthropicClient(config, logger);
     case 'openai':
       return new OpenAIClient(config, logger);
+    case 'moonshot':
+      return new MoonshotClient(config, logger);
     default:
       throw new Error(`Unsupported LLM provider: ${config.provider}`);
   }

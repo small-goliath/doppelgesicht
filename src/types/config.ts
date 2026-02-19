@@ -7,7 +7,7 @@
  */
 export interface LLMConfig {
   /** 기본 제공자 */
-  defaultProvider: 'anthropic' | 'openai';
+  defaultProvider: 'anthropic' | 'openai' | 'moonshot';
   /** 기본 모델 */
   defaultModel: string;
   /** 최대 토큰 수 */
