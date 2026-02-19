@@ -77,3 +77,6 @@ export {
   getMemoryManager,
   closeMemoryManager,
 } from './manager.js';
+
+// Supabase 모듈 (F008)
+export * as supabase from './supabase/index.js';
