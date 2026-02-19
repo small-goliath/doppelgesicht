@@ -215,6 +215,13 @@ export class SlackAdapter implements IChannelAdapter {
   }
 
   /**
+   * 연결 상태 확인
+   */
+  isConnected(): boolean {
+    return this.state.connected;
+  }
+
+  /**
    * 현재 상태 반환
    */
   getState(): SlackAdapterState {

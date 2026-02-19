@@ -41,6 +41,31 @@ export { LogLevel, LogOutput, LogLevelValue } from './types.js';
 // 로거 클래스
 export { Logger, initializeLogger, getLogger, closeLogger } from './logger.js';
 
+/**
+ * 간편 로거 생성 함수
+ * @param options - 로거 옵션
+ * @returns Logger 인스턴스
+ */
+export function createLogger(options?: {
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  console?: boolean;
+  file?: { enabled: boolean; path?: string };
+  json?: boolean;
+}): Logger {
+  const loggerOptions: Partial<import('./types.js').LoggerOptions> = {
+    minLevel: options?.level?.toUpperCase() as import('./types.js').LogLevel || 'INFO',
+    output: options?.console !== false ? 'console' : 'file',
+    useColors: true,
+  };
+
+  if (options?.file?.enabled) {
+    loggerOptions.output = 'both';
+    loggerOptions.logFilePath = options.file.path;
+  }
+
+  return new Logger(loggerOptions);
+}
+
 // 포맷터
 export { JsonFormatter, PrettyFormatter, createFormatter } from './formatters.js';
 

@@ -443,6 +443,7 @@ async function handleConfigEdit(): Promise<void> {
     p.outro('변경사항이 취소되었습니다.');
     return;
   }
+}
 
 /**
  * Commander 명령어 등록

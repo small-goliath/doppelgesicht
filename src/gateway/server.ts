@@ -392,7 +392,7 @@ export class GatewayServer {
       ([id, adapter]) => ({
         id,
         name: adapter.name,
-        type: adapter.type as 'telegram' | 'slack',
+        type: adapter.id as 'telegram' | 'slack',
         status: adapter.isConnected() ? 'connected' : 'disconnected',
       })
     );

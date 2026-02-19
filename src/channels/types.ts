@@ -108,6 +108,11 @@ export interface IChannelAdapter {
   stop(): Promise<void>;
 
   /**
+   * 연결 상태 확인
+   */
+  isConnected(): boolean;
+
+  /**
    * 메시지 전송
    * @param to 대상 ID (채팅 ID, 채널 ID 등)
    * @param message 발신 메시지

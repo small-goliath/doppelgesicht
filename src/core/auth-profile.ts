@@ -163,6 +163,15 @@ export class AuthProfileManager {
   }
 
   /**
+   * 프로파일의 자격 증명을 복호화하여 조회합니다 (getCredentials의 별칭)
+   * @param id - 프로파일 ID
+   * @returns 자격 증명 또는 undefined
+   */
+  getDecryptedCredentials(id: string): Credentials | undefined {
+    return this.getCredentials(id);
+  }
+
+  /**
    * 모든 프로파일을 조회합니다
    * @returns 프로파일 배열
    */
