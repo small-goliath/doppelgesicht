@@ -17,7 +17,7 @@
    ↓ 자격 증명 암호화 설정 (Argon2id + AES-256-GCM)
 
 3. LLM 프로파일 구성
-   ↓ Anthropic/OpenAI API 키 입력 및 암호화 저장
+   ↓ Anthropic/OpenAI/Moonshot API 키 입력 및 암호화 저장
 
 4. 채널 연결 설정
    ↓ Telegram/Slack/Discord 봇 토큰 입력
@@ -43,7 +43,7 @@
 | ID | 기능명 | 설명 | MVP 필수 이유 | 관련 페이지 |
 |----|--------|------|-------------|------------|
 | **F001** | 마스터 키 파생 및 암호화 | Argon2id 기반 마스터 키 생성, AES-256-GCM 자격 증명 암호화 | 데이터 프라이버시 핵심, 평문 저장 방지 | Onboard CLI, 인증 프로파일 관리 |
-| **F002** | LLM 클라이언트 통합 | Anthropic Claude, OpenAI GPT API 연동 | AI 응답 생성 핵심 기능 | Gateway 서버, Agent 대화 |
+| **F002** | LLM 클라이언트 통합 | Anthropic Claude, OpenAI GPT, Moonshot Kimi API 연동 | AI 응답 생성 핵심 기능 | Gateway 서버, Agent 대화 |
 | **F003** | Auth Profile 관리 | 다중 LLM 프로파일 저장, fallback 체인, rate limiting | 다양한 모델 활용 및 안정성 | 인증 프로파일 관리, Gateway 서버 |
 | **F004** | Telegram 채널 연동 | Telegram Bot API를 통한 메시지 수신/발신 | 핵심 메신저 채널 | 채널 설정 |
 | **F005** | Slack 채널 연동 | Slack Bolt를 통한 메시지 수신/발신 | 핵심 메신저 채널 | 채널 설정 |
@@ -117,7 +117,7 @@
 |------|------|
 | **역할** | 첫 실행 시 마스터 비밀번호 설정 및 초기 구성 수행 |
 | **진입 경로** | 터미널에서 `doppelgesicht onboard` 실행 |
-| **사용자 행동** | • 마스터 비밀번호 입력 (최소 12자, 복잡도 요구)<br>• 비밀번호 확인 입력<br>• LLM 제공자 선택 (Anthropic/OpenAI)<br>• API 키 입력<br>• Telegram/Slack/Discord 봇 토큰 입력 (선택)<br>• Supabase 연결 설정 (URL, API Key) |
+| **사용자 행동** | • 마스터 비밀번호 입력 (최소 12자, 복잡도 요구)<br>• 비밀번호 확인 입력<br>• LLM 제공자 선택 (Anthropic/OpenAI/Moonshot)<br>• API 키 입력<br>• Telegram/Slack/Discord 봇 토큰 입력 (선택)<br>• Supabase 연결 설정 (URL, API Key) |
 | **주요 기능** | • Argon2id 기반 마스터 키 파생 (64MB memory, 3 iterations, 4 parallelism)<br>• AES-256-GCM 암호화 설정 (256-bit salt, 12-byte nonce, 16-byte auth tag)<br>• 설정 파일 초기 생성 (version: "2")<br>• OS 키체인 통합 시도 (macOS/Windows/Linux)<br>• Supabase 프로젝트 연결 설정 및 초기 테이블 생성<br>• 기존 평문 자격 증명 마이그레이션 프롬프트 (F001-5)<br>• **[완료]** 설정 저장 및 Gateway 시작 안내 |
 | **에러 처리** | 비밀번호 불일치 → 재입력 요청<br>OS 키체인 실패 → 파일 기반 폴에러 반환 및 서버 시작 차단 안내<br>API 키 검증 실패 → 재입력 또는 스킵 |
 | **다음 이동** | 성공 → Gateway 시작 안내, 실패 → 오류 메시지 및 재시도 |
@@ -133,7 +133,7 @@
 | **역할** | HTTP/WebSocket 서버로 채널 연결 및 AI 대화 오케스트레이션 |
 | **진입 경로** | 터미널에서 `doppelgesicht gateway` 실행 또는 onboard 완료 후 자동 시작 |
 | **사용자 행동** | • 서버 시작 대기<br>• 로그 출력 확인<br>• 메신저에서 메시지 전송<br>• 도구 승인 요청 응답 (CLI 포그라운드 모드에서만) |
-| **주요 기능** | • HTTP API 엔드포인트 제공<br>&nbsp;&nbsp;- POST /v1/chat/completions (AI 대화)<br>&nbsp;&nbsp;- GET /v1/models (사용 가능한 모델)<br>&nbsp;&nbsp;- GET /v1/health (헬스 체크)<br>&nbsp;&nbsp;- POST /v1/channels/send (메시지 전송)<br>&nbsp;&nbsp;- GET /v1/channels (채널 목록)<br>• WebSocket 실시간 연결 관리 (심박수, 메시지 큐)<br>• Auth Profile 해결 및 fallback 처리 (라운드 로빈, 건강한 프로파일 우선)<br>• LLM 클라이언트 호출 (Anthropic/OpenAI 스트리밍 응답)<br>• 도구 실행 감지 및 승인 요청 (위험도 평가: low/medium/high/critical)<br>• 메모리 저장/검색 (Supabase PostgreSQL, 실시간 구독 지원)<br>• **[중지]** Ctrl+C로 서버 종료 |
+| **주요 기능** | • HTTP API 엔드포인트 제공<br>&nbsp;&nbsp;- POST /v1/chat/completions (AI 대화)<br>&nbsp;&nbsp;- GET /v1/models (사용 가능한 모델)<br>&nbsp;&nbsp;- GET /v1/health (헬스 체크)<br>&nbsp;&nbsp;- POST /v1/channels/send (메시지 전송)<br>&nbsp;&nbsp;- GET /v1/channels (채널 목록)<br>• WebSocket 실시간 연결 관리 (심박수, 메시지 큐)<br>• Auth Profile 해결 및 fallback 처리 (라운드 로빈, 건강한 프로파일 우선)<br>• LLM 클라이언트 호출 (Anthropic/OpenAI/Moonshot 스트리밍 응답)<br>• 도구 실행 감지 및 승인 요청 (위험도 평가: low/medium/high/critical)<br>• 메모리 저장/검색 (Supabase PostgreSQL, 실시간 구독 지원)<br>• **[중지]** Ctrl+C로 서버 종료 |
 | **에러 처리** | LLM API 실패 → fallback 프로파일로 재시도 (최대 3회)<br>Rate limit 초과 → exponential backoff (1s, 2s, 4s)<br>채널 연결 끊김 → 자동 재연결 (최대 5회)<br>마스터 키 복호화 실패 → 서버 시작 차단, onboard 재실행 안내 |
 | **다음 이동** | 실행 중 → 메신저 대화 모드, 종료 → CLI로 복귀 |
 
@@ -177,7 +177,7 @@
 |------|------|
 | **역할** | LLM 제공자별 API 키 및 인증 정보 암호화 저장 |
 | **진입 경로** | `doppelgesicht auth add`, `doppelgesicht auth list`, `doppelgesicht auth remove` 등 |
-| **사용자 행동** | • 제공자 선택 (anthropic/openai)<br>• 인증 방식 선택 (oauth/api_key)<br>• 자격 증명 입력<br>• 프로파일 목록 확인 |
+| **사용자 행동** | • 제공자 선택 (anthropic/openai/moonshot)<br>• 인증 방식 선택 (oauth/api_key)<br>• 자격 증명 입력<br>• 프로파일 목록 확인 |
 | **주요 기능** | • AES-256-GCM 암호화 저장 (마스터 키로 암호화)<br>• 마스터 키로 복호화 (런타임에 메모리에만 보관)<br>• 프로파일 우선순위/fallback 설정 (순서 지정)<br>• rate limit 및 health check 설정 (기본값: 60req/min)<br>• 프로파일 상태 모니터링 (healthy/degraded/cooldown)<br>• **[추가/삭제/수정]** 프로파일 관리 |
 | **에러 처리** | 마스터 키 없음 → onboard 실행 안내<br>복호화 실패 → 비밀번호 재입력 요청 (최대 3회)<br>API 검증 실패 → 프로파일 상태 degraded로 설정 |
 | **다음 이동** | 완료 → 설정 저장, 프로파일 사용 가능 |
@@ -251,7 +251,7 @@
 | 필드 | 설명 | 타입 |
 |------|------|------|
 | id | 프로파일 고유 식별자 | string |
-| provider | LLM 제공자 (anthropic/openai/bedrock/ollama) | string |
+| provider | LLM 제공자 (anthropic/openai/moonshot/bedrock/ollama) | string |
 | type | 인증 방식 (oauth/api_key) | string |
 | credentials | AES-256-GCM 암호화된 자격 증명 | EncryptedData |
 | rateLimits | API 호출 제한 설정 | { requestsPerMinute: number } |
@@ -316,6 +316,7 @@
 
 - **@anthropic-ai/sdk 0.24.3** - Claude API
 - **openai 4.x** - OpenAI API
+- **@moonshot-ai/sdk** (또는 OpenAI 호환 API) - Moonshot Kimi API
 
 ### 💬 메신저 채널
 
@@ -428,7 +429,7 @@ interface SessionIsolation {
 ### E2E 테스트 시나리오
 
 1. **정상 플로우**: onboard → gateway 시작 → Telegram/Slack/Discord 메시지 → AI 응답
-2. **fallback 시나리오**: Primary LLM 실패 → Secondary LLM 전환 → 응답 완료
+2. **fallback 시나리오**: Primary LLM(Anthropic) 실패 → Secondary LLM(OpenAI/Moonshot) 전환 → 응답 완료
 3. **승인 플로우**: 위험 도구 호출 → 승인 UI 표시 → 사용자 승인 → 실행 → 결과 반환
 4. **오류 복구**: 채널 연결 끊김 → 자동 재연결 → 메시지 처리 재개
 5. **멀티 채널**: Telegram 메시지 → Supabase 저장 → Discord에서 동일 세션 조회
