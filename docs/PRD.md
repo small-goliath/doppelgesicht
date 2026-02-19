@@ -119,7 +119,7 @@
 | **진입 경로** | 터미널에서 `doppelgesicht onboard` 실행 |
 | **사용자 행동** | • 마스터 비밀번호 입력 (최소 12자, 복잡도 요구)<br>• 비밀번호 확인 입력<br>• LLM 제공자 선택 (Anthropic/OpenAI)<br>• API 키 입력<br>• Telegram/Slack/Discord 봇 토큰 입력 (선택)<br>• Supabase 연결 설정 (URL, API Key) |
 | **주요 기능** | • Argon2id 기반 마스터 키 파생 (64MB memory, 3 iterations, 4 parallelism)<br>• AES-256-GCM 암호화 설정 (256-bit salt, 12-byte nonce, 16-byte auth tag)<br>• 설정 파일 초기 생성 (version: "2")<br>• OS 키체인 통합 시도 (macOS/Windows/Linux)<br>• Supabase 프로젝트 연결 설정 및 초기 테이블 생성<br>• 기존 평문 자격 증명 마이그레이션 프롬프트 (F001-5)<br>• **[완료]** 설정 저장 및 Gateway 시작 안내 |
-| **에러 처리** | 비밀번호 불일치 → 재입력 요청<br>OS 키체인 실패 → 파일 기반 폴백 안내<br>API 키 검증 실패 → 재입력 또는 스킵 |
+| **에러 처리** | 비밀번호 불일치 → 재입력 요청<br>OS 키체인 실패 → 파일 기반 폴에러 반환 및 서버 시작 차단 안내<br>API 키 검증 실패 → 재입력 또는 스킵 |
 | **다음 이동** | 성공 → Gateway 시작 안내, 실패 → 오류 메시지 및 재시도 |
 
 ---
@@ -378,7 +378,7 @@
 | **Rate limit 초과** | 요청 큐잉 및 지연 처리 | 헤더의 Retry-After 대기, 자동 재시도 |
 | **채널 연결 끊김** | 자동 재연결 시도 | 최대 5회 재연결, 1초 간격 |
 | **마스터 키 분실** | 복구 불가, 재설정 필요 | 데이터 초기화 및 onboard 재실행 안내 |
-| **Supabase 연결 실패** | 로컬 캐시 모드로 폴백 | 연결 재시도 (최대 5회), 로컬 SQLite 임시 저장 |
+| **Supabase 연결 실패** | 에러 반환 및 서버 시작 차단 | 연결 설정 확인 안내, 올바른 URL/API Key 요구 |
 | **메모리 제한 초과** | 프로세스 재시작 | graceful shutdown 및 상태 복구 |
 
 ### 동시성 제어

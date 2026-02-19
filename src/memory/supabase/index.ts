@@ -42,8 +42,3 @@ export {
   closeSupabaseMemoryManager,
 } from './manager.js';
 
-export {
-  migrateToSupabase,
-  verifyMigration,
-  type MigrationResult,
-} from './migrate.js';

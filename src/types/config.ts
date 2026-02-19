@@ -113,21 +113,12 @@ export interface SupabaseConfig {
  * 메모리 설정
  */
 export interface MemoryConfig {
-  /** SQLite 데이터베이스 경로 (로컬 캐시용) */
-  dbPath: string;
+  /** Supabase 설정 (F008) */
+  supabase: SupabaseConfig;
   /** 최대 컨텍스트 길이 */
   maxContextLength: number;
   /** 세션 만료 시간 (밀리초) */
   sessionExpiry: number;
-  /** Supabase 설정 (F008) */
-  supabase?: SupabaseConfig;
-  /** 로컬 캐시 설정 (Supabase 연결 실패 시 폴리) */
-  localCache?: {
-    /** 로컬 캐시 사용 여부 */
-    enabled: boolean;
-    /** SQLite 캐시 DB 경로 */
-    dbPath: string;
-  };
 }
 
 /**

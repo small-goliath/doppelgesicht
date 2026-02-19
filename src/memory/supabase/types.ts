@@ -3,8 +3,6 @@
  * @description @supabase/supabase-js 기반 PostgreSQL 연동
  */
 
-// Supabase 메모리 시스템 타입 정의
-
 /**
  * Supabase 연결 설정
  */
@@ -32,22 +30,29 @@ export interface SupabaseConfig {
 }
 
 /**
- * Supabase 메모리 설정 (MemoryConfig 확장)
+ * Supabase 메모리 설정
  */
 export interface SupabaseMemoryConfig {
   /** Supabase 연결 설정 */
   supabase: SupabaseConfig;
-  /** 로컬 캐시 설정 (Supabase 연결 실패 시 폴백) */
-  localCache?: {
-    /** 로컬 캐시 사용 여부 */
-    enabled: boolean;
-    /** SQLite 캐시 DB 경로 */
-    dbPath: string;
-  };
   /** 최대 컨텍스트 길이 */
   maxContextLength: number;
   /** 세션 만료 시간 (밀리초) */
   sessionExpiry: number;
+}
+
+/**
+ * Supabase 연결 상태
+ */
+export interface SupabaseConnectionState {
+  /** 연결 상태 */
+  connected: boolean;
+  /** 인증 상태 */
+  authenticated: boolean;
+  /** 마지막 에러 메시지 */
+  lastError?: string;
+  /** 재연결 시도 횟수 */
+  reconnectAttempts: number;
 }
 
 /**
@@ -79,22 +84,6 @@ export interface SupabaseMessageRow {
   tool_results: Record<string, unknown>[] | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
-}
-
-/**
- * Supabase 연결 상태
- */
-export interface SupabaseConnectionState {
-  /** 연결 상태 */
-  connected: boolean;
-  /** 인증 상태 */
-  authenticated: boolean;
-  /** 마지막 에러 메시지 */
-  lastError?: string;
-  /** 로컬 캐시 모드 여부 */
-  localCacheMode: boolean;
-  /** 재연결 시도 횟수 */
-  reconnectAttempts: number;
 }
 
 /**
