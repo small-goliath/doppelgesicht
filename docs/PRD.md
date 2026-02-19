@@ -20,13 +20,13 @@
    ↓ Anthropic/OpenAI API 키 입력 및 암호화 저장
 
 4. 채널 연결 설정
-   ↓ Telegram/Slack 봇 토큰 입력
+   ↓ Telegram/Slack/Discord 봇 토큰 입력
 
 5. Gateway 시작
    ↓ doppelgesicht gateway 실행
 
 6. 메신저에서 AI 대화 시작
-   ↓ 사용자가 Telegram/Slack에서 메시지 전송
+   ↓ 사용자가 Telegram/Slack/Discord에서 메시지 전송
 
 7. AI 응답 수신
    ↓ 도구 실행 필요 시 승인 요청 (CLI 모드: 터미널 UI, Daemon 모드: 자동 거부 또는 화이트리스트)
@@ -47,9 +47,10 @@
 | **F003** | Auth Profile 관리 | 다중 LLM 프로파일 저장, fallback 체인, rate limiting | 다양한 모델 활용 및 안정성 | 인증 프로파일 관리, Gateway 서버 |
 | **F004** | Telegram 채널 연동 | Telegram Bot API를 통한 메시지 수신/발신 | 핵심 메신저 채널 | 채널 설정 |
 | **F005** | Slack 채널 연동 | Slack Bolt를 통한 메시지 수신/발신 | 핵심 메신저 채널 | 채널 설정 |
+| **F005-1** | Discord 채널 연동 | Discord.js를 통한 메시지 수신/발신 | 핵심 메신저 채널 | 채널 설정 |
 | **F006** | Bash 도구 실행 | 터미널 명령어 실행, 출력 캡처 | 파일 시스템 접근 및 작업 수행 | Agent 대화 |
 | **F007** | 도구 승인 시스템 | 위험도 기반 실행 전 승인 요청 (CLI/Daemon 모드 차별화) | 안전한 AI 작업 위임 | 승인 UI, Gateway 서버 |
-| **F008** | 메모리 시스템 | SQLite 기반 대화 기록 저장, 문맥 관리 | 연속적인 대화 가능 | 데이터 레이어 |
+| **F008** | 메모리 시스템 | Supabase 기반 대화 기록 저장, 문맥 관리 | 연속적인 대화 가능 | 데이터 레이어 |
 | **F009** | Gateway HTTP/WebSocket | REST API 및 실시간 연결 서버 | 외부 채널 연결 허브 | Gateway 서버 |
 | **F010** | CLI 명령어 | onboard, gateway, agent, config, auth, message, browser 명령어 | 사용자 인터페이스 | 전체 CLI |
 | **F014** | 메시지 전송 테스트 | CLI에서 직접 채널로 메시지 전송 테스트 | 채널 연결 검증 | message CLI |
@@ -64,7 +65,7 @@
 
 ### 3. MVP 이후 기능 (제외)
 
-- Discord, WhatsApp, Signal 등 추가 채널
+- WhatsApp, Signal 등 추가 채널
 - 음성 통화 기능
 - Canvas A2UI 렌더링
 - 스킬/확장 시스템
@@ -87,7 +88,7 @@
 ├── 🤖 agent - F010
 │   └── 기능: AI 대화 시작, 도구 실행 (F002, F006, F007)
 ├── 📨 message - F014
-│   └── 기능: 메시지 전송 테스트 (F004, F005)
+│   └── 기능: 메시지 전송 테스트 (F004, F005, F005-1)
 ├── ⚙️ config - F010
 │   └── 기능: 설정 관리 (F011)
 ├── 🔐 auth - F010
@@ -100,8 +101,8 @@
 │   └── 기능: 사용자 설정, 채널 설정, LLM 프로파일
 ├── auth-profiles.json (암호화) - F001
 │   └── 기능: 암호화된 자격 증명 저장
-└── sessions/ - F008
-    └── 기능: 대화 세션 데이터
+└── supabase/ - F008
+    └── 기능: Supabase 연결 설정 및 마이그레이션
 ```
 
 ---
@@ -116,8 +117,8 @@
 |------|------|
 | **역할** | 첫 실행 시 마스터 비밀번호 설정 및 초기 구성 수행 |
 | **진입 경로** | 터미널에서 `doppelgesicht onboard` 실행 |
-| **사용자 행동** | • 마스터 비밀번호 입력 (최소 12자, 복잡도 요구)<br>• 비밀번호 확인 입력<br>• LLM 제공자 선택 (Anthropic/OpenAI)<br>• API 키 입력<br>• Telegram/Slack 봇 토큰 입력 (선택) |
-| **주요 기능** | • Argon2id 기반 마스터 키 파생 (64MB memory, 3 iterations, 4 parallelism)<br>• AES-256-GCM 암호화 설정 (256-bit salt, 12-byte nonce, 16-byte auth tag)<br>• 설정 파일 초기 생성 (version: "2")<br>• OS 키체인 통합 시도 (macOS/Windows/Linux)<br>• 기존 평문 자격 증명 마이그레이션 프롬프트 (F001-5)<br>• **[완료]** 설정 저장 및 Gateway 시작 안내 |
+| **사용자 행동** | • 마스터 비밀번호 입력 (최소 12자, 복잡도 요구)<br>• 비밀번호 확인 입력<br>• LLM 제공자 선택 (Anthropic/OpenAI)<br>• API 키 입력<br>• Telegram/Slack/Discord 봇 토큰 입력 (선택)<br>• Supabase 연결 설정 (URL, API Key) |
+| **주요 기능** | • Argon2id 기반 마스터 키 파생 (64MB memory, 3 iterations, 4 parallelism)<br>• AES-256-GCM 암호화 설정 (256-bit salt, 12-byte nonce, 16-byte auth tag)<br>• 설정 파일 초기 생성 (version: "2")<br>• OS 키체인 통합 시도 (macOS/Windows/Linux)<br>• Supabase 프로젝트 연결 설정 및 초기 테이블 생성<br>• 기존 평문 자격 증명 마이그레이션 프롬프트 (F001-5)<br>• **[완료]** 설정 저장 및 Gateway 시작 안내 |
 | **에러 처리** | 비밀번호 불일치 → 재입력 요청<br>OS 키체인 실패 → 파일 기반 폴백 안내<br>API 키 검증 실패 → 재입력 또는 스킵 |
 | **다음 이동** | 성공 → Gateway 시작 안내, 실패 → 오류 메시지 및 재시도 |
 
@@ -132,7 +133,7 @@
 | **역할** | HTTP/WebSocket 서버로 채널 연결 및 AI 대화 오케스트레이션 |
 | **진입 경로** | 터미널에서 `doppelgesicht gateway` 실행 또는 onboard 완료 후 자동 시작 |
 | **사용자 행동** | • 서버 시작 대기<br>• 로그 출력 확인<br>• 메신저에서 메시지 전송<br>• 도구 승인 요청 응답 (CLI 포그라운드 모드에서만) |
-| **주요 기능** | • HTTP API 엔드포인트 제공<br>&nbsp;&nbsp;- POST /v1/chat/completions (AI 대화)<br>&nbsp;&nbsp;- GET /v1/models (사용 가능한 모델)<br>&nbsp;&nbsp;- GET /v1/health (헬스 체크)<br>&nbsp;&nbsp;- POST /v1/channels/send (메시지 전송)<br>&nbsp;&nbsp;- GET /v1/channels (채널 목록)<br>• WebSocket 실시간 연결 관리 (심박수, 메시지 큐)<br>• Auth Profile 해결 및 fallback 처리 (라운드 로빈, 건강한 프로파일 우선)<br>• LLM 클라이언트 호출 (Anthropic/OpenAI 스트리밍 응답)<br>• 도구 실행 감지 및 승인 요청 (위험도 평가: low/medium/high/critical)<br>• 메모리 저장/검색 (SQLite 동시성 제어: 접근 큐잉)<br>• **[중지]** Ctrl+C로 서버 종료 |
+| **주요 기능** | • HTTP API 엔드포인트 제공<br>&nbsp;&nbsp;- POST /v1/chat/completions (AI 대화)<br>&nbsp;&nbsp;- GET /v1/models (사용 가능한 모델)<br>&nbsp;&nbsp;- GET /v1/health (헬스 체크)<br>&nbsp;&nbsp;- POST /v1/channels/send (메시지 전송)<br>&nbsp;&nbsp;- GET /v1/channels (채널 목록)<br>• WebSocket 실시간 연결 관리 (심박수, 메시지 큐)<br>• Auth Profile 해결 및 fallback 처리 (라운드 로빈, 건강한 프로파일 우선)<br>• LLM 클라이언트 호출 (Anthropic/OpenAI 스트리밍 응답)<br>• 도구 실행 감지 및 승인 요청 (위험도 평가: low/medium/high/critical)<br>• 메모리 저장/검색 (Supabase PostgreSQL, 실시간 구독 지원)<br>• **[중지]** Ctrl+C로 서버 종료 |
 | **에러 처리** | LLM API 실패 → fallback 프로파일로 재시도 (최대 3회)<br>Rate limit 초과 → exponential backoff (1s, 2s, 4s)<br>채널 연결 끊김 → 자동 재연결 (최대 5회)<br>마스터 키 복호화 실패 → 서버 시작 차단, onboard 재실행 안내 |
 | **다음 이동** | 실행 중 → 메신저 대화 모드, 종료 → CLI로 복귀 |
 
@@ -159,10 +160,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| **역할** | Telegram/Slack 채널 연결 설정 관리 |
+| **역할** | Telegram/Slack/Discord 채널 연결 설정 관리 |
 | **진입 경로** | onboard 중 또는 `doppelgesicht config`로 설정 파일 편집 |
 | **사용자 행동** | • 봇 토큰 입력<br>• 허용 사용자 목록 설정<br>• 채널 활성화/비활성화 |
-| **주요 기능** | • Telegram Bot API 토큰 검증 (getMe 호출)<br>• Slack App/Bot 토큰 검증 (auth.test 호출)<br>• allowed_users 화이트리스트 관리<br>• 채널 어댑터 초기화<br>• **[저장]** 설정 파일 저장 및 Gateway 리로드 |
+| **주요 기능** | • Telegram Bot API 토큰 검증 (getMe 호출)<br>• Slack App/Bot 토큰 검증 (auth.test 호출)<br>• Discord Bot 토큰 검증 (gateway 연결 테스트)<br>• allowed_users 화이트리스트 관리<br>• 채널 어댑터 초기화<br>• **[저장]** 설정 파일 저장 및 Gateway 리로드 |
 | **에러 처리** | 토큰 검증 실패 → 오류 메시지 표시 (403: 권한 없음, 404: 토큰 무효)<br>중복 채널 ID → 충돌 경고 |
 | **다음 이동** | 저장 → Gateway 자동 리로드 또는 수동 재시작 안내 |
 
@@ -276,7 +277,7 @@
 | 필드 | 설명 | 타입 |
 |------|------|------|
 | id | 채널 식별자 | string |
-| type | 채널 타입 (telegram/slack) | string |
+| type | 채널 타입 (telegram/slack/discord) | string |
 | enabled | 활성화 여부 | boolean |
 | credentials | 채널별 인증 정보 (토큰 등, 암호화) | EncryptedData |
 | allowedUsers | 허용된 사용자 목록 | string[] |
@@ -321,11 +322,12 @@
 - **grammy 1.40.0** - Telegram Bot API
 - **@slack/bolt 4.6.0** - Slack 프레임워크
 - **@slack/web-api 7.14.0** - Slack Web API
+- **discord.js 14.x** - Discord Bot API
 
 ### 🗄️ 데이터 저장
 
-- **better-sqlite3** - SQLite 동기 드라이버 (동시성 큐잉 필요)
-- **sqlite-vec 0.1.7-alpha.2** - SQLite 벡터 확장 (확장용)
+- **@supabase/supabase-js 2.x** - Supabase 클라이언트 (PostgreSQL + 실시간)
+- **supabase** - 클라우드 PostgreSQL 데이터베이스
 
 ### 🔒 보안
 
@@ -376,23 +378,37 @@
 | **Rate limit 초과** | 요청 큐잉 및 지연 처리 | 헤더의 Retry-After 대기, 자동 재시도 |
 | **채널 연결 끊김** | 자동 재연결 시도 | 최대 5회 재연결, 1초 간격 |
 | **마스터 키 분실** | 복구 불가, 재설정 필요 | 데이터 초기화 및 onboard 재실행 안내 |
-| **SQLite 동시 접근** | 접근 큐잉 및 순차 처리 | better-sqlite3의 동기적 특성 활용, 메모리 큐 사용 |
+| **Supabase 연결 실패** | 로컬 캐시 모드로 폴백 | 연결 재시도 (최대 5회), 로컬 SQLite 임시 저장 |
 | **메모리 제한 초과** | 프로세스 재시작 | graceful shutdown 및 상태 복구 |
 
 ### 동시성 제어
 
 ```typescript
-// SQLite 동시성 처리
-interface ConcurrencyControl {
-  strategy: "queue";  // better-sqlite3 동기 드라이버 사용
-  maxQueueSize: 100;
-  timeout: 5000;  // 5초
+// Supabase 연결 풀 설정
+interface SupabaseConfig {
+  url: string;
+  anonKey: string;
+  options: {
+    auth: {
+      persistSession: true;
+    };
+    db: {
+      schema: "public";
+    };
+  };
+}
+
+// 실시간 구독 설정
+interface RealtimeConfig {
+  enabled: true;
+  tables: ["sessions", "messages"];
 }
 
 // 세션 격리
 interface SessionIsolation {
   perUser: true;     // 사용자별 세션 분리
   perChannel: true;  // 채널별 세션 분리
+  rowLevelSecurity: true;  // Supabase RLS 활성화
 }
 ```
 
@@ -411,10 +427,11 @@ interface SessionIsolation {
 
 ### E2E 테스트 시나리오
 
-1. **정상 플로우**: onboard → gateway 시작 → Telegram 메시지 → AI 응답
+1. **정상 플로우**: onboard → gateway 시작 → Telegram/Slack/Discord 메시지 → AI 응답
 2. **fallback 시나리오**: Primary LLM 실패 → Secondary LLM 전환 → 응답 완료
 3. **승인 플로우**: 위험 도구 호출 → 승인 UI 표시 → 사용자 승인 → 실행 → 결과 반환
 4. **오류 복구**: 채널 연결 끊김 → 자동 재연결 → 메시지 처리 재개
+5. **멀티 채널**: Telegram 메시지 → Supabase 저장 → Discord에서 동일 세션 조회
 
 ---
 
