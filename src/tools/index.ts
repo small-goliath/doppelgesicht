@@ -11,3 +11,4 @@ export type {
 
 export * as bash from './bash/index.js';
 export * as browser from './browser/index.js';
+export * as approval from './approval/index.js';
