@@ -88,7 +88,10 @@ const MemoryConfigSchema = z.object({
   dbPath: z.string().default(join(DEFAULT_CONFIG_DIR, 'memory.db')),
   maxContextLength: z.number().int().min(1).default(10),
   sessionExpiry: z.number().int().default(7 * 24 * 60 * 60 * 1000), // 7일
-  supabase: SupabaseConfigSchema.optional(),
+  supabase: SupabaseConfigSchema.default({
+    url: process.env.SUPABASE_URL || 'https://default.supabase.co',
+    anonKey: process.env.SUPABASE_ANON_KEY || 'default-key',
+  }),
   localCache: z.object({
     enabled: z.boolean().default(true),
     dbPath: z.string().default(join(DEFAULT_CONFIG_DIR, 'cache.db')),

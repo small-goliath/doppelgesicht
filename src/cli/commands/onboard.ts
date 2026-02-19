@@ -114,7 +114,7 @@ class OnboardWizard {
       p.log.info(colors.dim(`설정 파일: ${DEFAULT_CONFIG_PATH}`));
       p.log.info(colors.dim('이제 `doppelgesicht start`로 서버를 시작할 수 있습니다.'));
     } catch (error) {
-      this.logger.error('Onboard failed', { error });
+      this.logger.error('Onboard failed', error as Error);
       p.outro(colors.red('설정 중 오류가 발생했습니다.'));
       process.exit(1);
     }
@@ -133,6 +133,7 @@ class OnboardWizard {
         if (!result.valid) {
           return result.errors.join('\n');
         }
+        return undefined;
       },
     });
 
@@ -204,23 +205,13 @@ class OnboardWizard {
   }> {
     p.log.step('🤖 LLM 제공자 설정');
 
-    const provider = await p.select<{
-      value: LLMProvider;
-      label: string;
-      hint?: string;
-    }[]>({
+    const providerOptions: { value: LLMProvider; label: string; hint?: string }[] = [
+      { value: 'anthropic', label: 'Anthropic (Claude)', hint: '권장' },
+      { value: 'openai', label: 'OpenAI (GPT)' },
+    ];
+    const provider = await p.select({
       message: 'LLM 제공자를 선택하세요:',
-      options: [
-        {
-          value: 'anthropic',
-          label: 'Anthropic (Claude)',
-          hint: '권장',
-        },
-        {
-          value: 'openai',
-          label: 'OpenAI (GPT)',
-        },
-      ],
+      options: providerOptions,
     });
 
     if (p.isCancel(provider)) {
@@ -240,6 +231,7 @@ class OnboardWizard {
         if (provider === 'openai' && !value.startsWith('sk-')) {
           return 'OpenAI API 키는 sk-로 시작해야 합니다';
         }
+        return undefined;
       },
     });
 
@@ -280,12 +272,12 @@ class OnboardWizard {
     try {
       if (provider === 'anthropic') {
         const { AnthropicClient } = await import('../../llm/anthropic.js');
-        const client = new AnthropicClient(apiKey);
-        return await client.validateKey();
+        const client = new AnthropicClient({ provider: 'anthropic', apiKey }, this.logger);
+        return await client.healthCheck().then(h => h.healthy);
       } else {
         const { OpenAIClient } = await import('../../llm/openai.js');
-        const client = new OpenAIClient(apiKey);
-        return await client.validateKey();
+        const client = new OpenAIClient({ provider: 'openai', apiKey }, this.logger);
+        return await client.healthCheck().then(h => h.healthy);
       }
     } catch {
       return false;
@@ -348,8 +340,9 @@ class OnboardWizard {
         message: 'Telegram Bot Token을 입력하세요:',
         validate: (value) => {
           if (!value || !value.includes(':')) {
-            return '유효한 Bot Token을 입력하세요 (예: 123456:ABC-DEF...)'
+            return '유효한 Bot Token을 입력하세요 (예: 123456:ABC-DEF...)';
           }
+          return undefined;
         },
       });
 
@@ -370,8 +363,9 @@ class OnboardWizard {
         message: 'Slack App Token을 입력하세요 (xapp-로 시작):',
         validate: (value) => {
           if (!value || !value.startsWith('xapp-')) {
-            return '유효한 App Token을 입력하세요'
+            return '유효한 App Token을 입력하세요';
           }
+          return undefined;
         },
       });
 
@@ -380,8 +374,9 @@ class OnboardWizard {
           message: 'Slack Bot Token을 입력하세요 (xoxb-로 시작):',
           validate: (value) => {
             if (!value || !value.startsWith('xoxb-')) {
-              return '유효한 Bot Token을 입력하세요'
+              return '유효한 Bot Token을 입력하세요';
             }
+            return undefined;
           },
         });
 
@@ -403,8 +398,9 @@ class OnboardWizard {
         message: 'Discord Bot Token을 입력하세요:',
         validate: (value) => {
           if (!value || value.length < 50) {
-            return '유효한 Bot Token을 입력하세요'
+            return '유효한 Bot Token을 입력하세요';
           }
+          return undefined;
         },
       });
 
@@ -485,7 +481,10 @@ class OnboardWizard {
         json: true,
       },
       memory: {
-        dbPath: join(DEFAULT_CONFIG_DIR, 'memory.db'),
+        supabase: {
+          url: '',
+          anonKey: '',
+        },
         maxContextLength: 10,
         sessionExpiry: 7 * 24 * 60 * 60 * 1000,
       },

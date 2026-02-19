@@ -9,7 +9,7 @@ import type { SupabaseConfig, SupabaseConnectionState } from './types.js';
 /**
  * Supabase 클라이언트 인스턴스
  */
-let supabaseClient: SupabaseClient | null = null;
+let supabaseClient: SupabaseClient<any, 'public', any> | null = null;
 
 /**
  * 연결 상태
@@ -17,7 +17,6 @@ let supabaseClient: SupabaseClient | null = null;
 let connectionState: SupabaseConnectionState = {
   connected: false,
   authenticated: false,
-  localCacheMode: false,
   reconnectAttempts: 0,
 };
 
@@ -26,7 +25,7 @@ let connectionState: SupabaseConnectionState = {
  * @param config - Supabase 연결 설정
  * @returns Supabase 클라이언트 인스턴스
  */
-export function initializeSupabaseClient(config: SupabaseConfig): SupabaseClient {
+export function initializeSupabaseClient(config: SupabaseConfig): SupabaseClient<any, 'public', any> {
   if (supabaseClient) {
     return supabaseClient;
   }
@@ -39,7 +38,7 @@ export function initializeSupabaseClient(config: SupabaseConfig): SupabaseClient
     db: {
       schema: config.options?.db?.schema ?? 'public',
     },
-  });
+  }) as SupabaseClient<any, 'public', any>;
 
   supabaseClient = client;
   return client;
@@ -49,7 +48,7 @@ export function initializeSupabaseClient(config: SupabaseConfig): SupabaseClient
  * Supabase 클라이언트 조회
  * @returns 초기화된 Supabase 클라이언트 또는 null
  */
-export function getSupabaseClient(): SupabaseClient | null {
+export function getSupabaseClient(): SupabaseClient<any, 'public', any> | null {
   return supabaseClient;
 }
 
@@ -100,62 +99,6 @@ export function getSupabaseConnectionState(): SupabaseConnectionState {
 }
 
 /**
- * 로컬 캐시 모드 설정
- * @param enabled - 로컬 캐시 모드 활성화 여부
- */
-export function setLocalCacheMode(enabled: boolean): void {
-  connectionState.localCacheMode = enabled;
-}
-
-/**
- * 재연결 시도
- * @param config - Supabase 연결 설정
- * @param maxRetries - 최대 재시도 횟수
- * @returns 재연결 성공 여부
- */
-export async function reconnectSupabase(
-  config: SupabaseConfig,
-  maxRetries: number = 5
-): Promise<boolean> {
-  if (connectionState.reconnectAttempts >= maxRetries) {
-    connectionState.lastError = `Max reconnection attempts (${maxRetries}) exceeded`;
-    // 로컬 캐시 모드로 전환
-    setLocalCacheMode(true);
-    return false;
-  }
-
-  connectionState.reconnectAttempts++;
-
-  try {
-    // 기존 클라이언트 정리
-    if (supabaseClient) {
-      supabaseClient.removeAllChannels();
-    }
-    supabaseClient = null;
-
-    // 새 클라이언트 초기화
-    initializeSupabaseClient(config);
-
-    // 연결 테스트
-    const connected = await testSupabaseConnection();
-
-    if (connected) {
-      connectionState.localCacheMode = false;
-      return true;
-    }
-
-    // 재시도 간격 (지수 백오프)
-    const delay = Math.min(1000 * Math.pow(2, connectionState.reconnectAttempts - 1), 30000);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-
-    return reconnectSupabase(config, maxRetries);
-  } catch (error) {
-    connectionState.lastError = (error as Error).message;
-    return false;
-  }
-}
-
-/**
  * Supabase 클라이언트 종료
  */
 export function closeSupabaseClient(): void {
@@ -167,7 +110,6 @@ export function closeSupabaseClient(): void {
   connectionState = {
     connected: false,
     authenticated: false,
-    localCacheMode: false,
     reconnectAttempts: 0,
   };
 }

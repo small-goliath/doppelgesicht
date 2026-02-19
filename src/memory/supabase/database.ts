@@ -340,8 +340,8 @@ export class SupabaseDatabaseManager {
       sessionId: row.session_id,
       role: row.role as MessageRole,
       content: row.content,
-      toolCalls: row.tool_calls || undefined,
-      toolResults: row.tool_results || undefined,
+      toolCalls: row.tool_calls ? (row.tool_calls as unknown as import('../types.js').ToolCall[]) : undefined,
+      toolResults: row.tool_results ? (row.tool_results as unknown as import('../types.js').ToolResult[]) : undefined,
       metadata: row.metadata || undefined,
       createdAt: new Date(row.created_at),
     };

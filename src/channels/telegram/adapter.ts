@@ -12,7 +12,7 @@ import type {
 } from './types.js';
 import { TELEGRAM_CAPABILITIES } from './types.js';
 import type { IChannelAdapter, ChannelConfig } from '../types.js';
-import type { Logger } from '../../logging/index.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * Telegram 채널 어댑터
@@ -24,12 +24,12 @@ export class TelegramAdapter implements IChannelAdapter {
 
   private bot?: Bot;
   private config: TelegramConfig;
-  private logger: Logger;
+  private logger: ILogger;
   private state: TelegramAdapterState = { connected: false };
   private messageHandler?: (message: TelegramIncomingMessage) => void | Promise<void>;
 
-  constructor(config: ChannelConfig, logger: Logger) {
-    this.config = config as TelegramConfig;
+  constructor(config: ChannelConfig, logger: ILogger) {
+    this.config = config as unknown as TelegramConfig;
     this.logger = logger.child('TelegramAdapter');
   }
 
@@ -37,7 +37,7 @@ export class TelegramAdapter implements IChannelAdapter {
    * 어댑터 초기화
    */
   async initialize(config: ChannelConfig): Promise<void> {
-    this.config = config as TelegramConfig;
+    this.config = config as unknown as TelegramConfig;
     this.logger.debug('Initializing Telegram adapter');
 
     // 봇 인스턴스 생성
@@ -50,11 +50,11 @@ export class TelegramAdapter implements IChannelAdapter {
 
       const e = err.error;
       if (e instanceof GrammyError) {
-        this.logger.error('Error in request:', e.description);
+        this.logger.error('Error in request:', new Error(e.description));
       } else if (e instanceof HttpError) {
         this.logger.error('Could not contact Telegram:', e);
       } else {
-        this.logger.error('Unknown error:', e);
+        this.logger.error('Unknown error:', e instanceof Error ? e : new Error(String(e)));
       }
     });
 
@@ -151,7 +151,7 @@ export class TelegramAdapter implements IChannelAdapter {
     try {
       await this.bot.api.sendMessage(chatId, message.text, {
         parse_mode: message.parseMode,
-        reply_markup: message.replyMarkup,
+        reply_markup: message.replyMarkup as never,
         reply_to_message_id: message.replyToMessageId,
       });
 
@@ -196,7 +196,7 @@ export class TelegramAdapter implements IChannelAdapter {
 
     try {
       await this.bot.api.setMessageReaction(Number(chatId), Number(msgId), [
-        { type: 'emoji', emoji },
+        { type: 'emoji', emoji: emoji as unknown as never },
       ]);
     } catch (error) {
       this.logger.error('Failed to add reaction', error as Error);

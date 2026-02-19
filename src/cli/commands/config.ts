@@ -138,7 +138,7 @@ async function handleConfigGet(key?: string, options: { raw?: boolean } = {}): P
 
     if (key) {
       // 특정 키 조회
-      const value = getNestedValue(config as Record<string, unknown>, key);
+      const value = getNestedValue(config as unknown as Record<string, unknown>, key);
 
       if (value === undefined) {
         p.log.error(`설정 키를 찾을 수 없습니다: ${key}`);
@@ -178,14 +178,14 @@ async function handleConfigSet(key: string, value: string): Promise<void> {
     const config = configManager.load();
 
     // 값 설정
-    setNestedValue(config as Record<string, unknown>, key, value);
+    setNestedValue(config as unknown as Record<string, unknown>, key, value);
 
     // 저장
     configManager.save(config);
 
     spinner.stop('설정 업데이트 완료');
 
-    const newValue = getNestedValue(config as Record<string, unknown>, key);
+    const newValue = getNestedValue(config as unknown as Record<string, unknown>, key);
     p.log.success(`${pc.cyan(key)}가 업데이트되었습니다:`);
     displayValue('새 값', newValue);
   } catch (error) {
@@ -319,7 +319,7 @@ async function handleConfigEdit(): Promise<void> {
       });
 
       if (!p.isCancel(provider)) {
-        setNestedValue(config as Record<string, unknown>, 'llm.defaultProvider', provider as string);
+        setNestedValue(config as unknown as Record<string, unknown>, 'llm.defaultProvider', provider as string);
       }
 
       const model = await p.text({
@@ -328,7 +328,7 @@ async function handleConfigEdit(): Promise<void> {
       });
 
       if (!p.isCancel(model)) {
-        setNestedValue(config as Record<string, unknown>, 'llm.defaultModel', model as string);
+        setNestedValue(config as unknown as Record<string, unknown>, 'llm.defaultModel', model as string);
       }
 
       const maxTokens = await p.text({
@@ -339,11 +339,12 @@ async function handleConfigEdit(): Promise<void> {
           if (isNaN(num) || num < 1 || num > 8192) {
             return '1에서 8192 사이의 숫자를 입력하세요.';
           }
+          return undefined;
         },
       });
 
       if (!p.isCancel(maxTokens)) {
-        setNestedValue(config as Record<string, unknown>, 'llm.maxTokens', maxTokens as string);
+        setNestedValue(config as unknown as Record<string, unknown>, 'llm.maxTokens', maxTokens as string);
       }
       break;
     }
@@ -355,7 +356,7 @@ async function handleConfigEdit(): Promise<void> {
       });
 
       if (!p.isCancel(host)) {
-        setNestedValue(config as Record<string, unknown>, 'gateway.host', host as string);
+        setNestedValue(config as unknown as Record<string, unknown>, 'gateway.host', host as string);
       }
 
       const httpPort = await p.text({
@@ -366,11 +367,12 @@ async function handleConfigEdit(): Promise<void> {
           if (isNaN(num) || num < 1 || num > 65535) {
             return '1에서 65535 사이의 포트를 입력하세요.';
           }
+          return undefined;
         },
       });
 
       if (!p.isCancel(httpPort)) {
-        setNestedValue(config as Record<string, unknown>, 'gateway.httpPort', httpPort as string);
+        setNestedValue(config as unknown as Record<string, unknown>, 'gateway.httpPort', httpPort as string);
       }
       break;
     }
@@ -382,7 +384,7 @@ async function handleConfigEdit(): Promise<void> {
       });
 
       if (!p.isCancel(enabled)) {
-        setNestedValue(config as Record<string, unknown>, 'channels.enabled', String(enabled));
+        setNestedValue(config as unknown as Record<string, unknown>, 'channels.enabled', String(enabled));
       }
       break;
     }
@@ -399,7 +401,7 @@ async function handleConfigEdit(): Promise<void> {
       });
 
       if (!p.isCancel(level)) {
-        setNestedValue(config as Record<string, unknown>, 'logging.level', level as string);
+        setNestedValue(config as unknown as Record<string, unknown>, 'logging.level', level as string);
       }
 
       const console = await p.confirm({
@@ -408,7 +410,7 @@ async function handleConfigEdit(): Promise<void> {
       });
 
       if (!p.isCancel(console)) {
-        setNestedValue(config as Record<string, unknown>, 'logging.console', String(console));
+        setNestedValue(config as unknown as Record<string, unknown>, 'logging.console', String(console));
       }
       break;
     }
@@ -423,7 +425,7 @@ async function handleConfigEdit(): Promise<void> {
       });
 
       if (!p.isCancel(mode)) {
-        setNestedValue(config as Record<string, unknown>, 'security.approvalMode', mode as string);
+        setNestedValue(config as unknown as Record<string, unknown>, 'security.approvalMode', mode as string);
       }
       break;
     }

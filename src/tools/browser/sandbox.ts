@@ -17,7 +17,7 @@ import type {
   PlaywrightConfig,
   StaticAnalysisRule,
 } from './types.js';
-import type { Logger } from '../../logging/index.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * Browser 샌드박스 구현
@@ -26,10 +26,10 @@ export class BrowserSandbox implements IBrowserSandbox {
   private staticAnalyzer: StaticAnalyzer;
   private vmRunner: VMRunner;
   private playwrightRunner: PlaywrightRunner;
-  private logger: Logger;
+  private logger: ILogger;
 
-  constructor(logger: Logger) {
-    this.logger = logger.child('BrowserSandbox');
+  constructor(logger: ILogger) {
+    this.logger = logger.child('BrowserSandbox') as ILogger;
     this.staticAnalyzer = new StaticAnalyzer(this.logger);
     this.vmRunner = new VMRunner(this.logger);
     this.playwrightRunner = new PlaywrightRunner(this.logger);
@@ -63,8 +63,8 @@ export class BrowserSandbox implements IBrowserSandbox {
       if (criticalViolations.length > 0) {
         const duration = Date.now() - startTime;
 
-        this.logger.error('Critical violations detected, aborting', {
-          violations: criticalViolations.map((v) => v.ruleId),
+        this.logger.error('Critical violations detected, aborting', new Error('Critical violations'), {
+          violationIds: criticalViolations.map((v) => v.ruleId),
         });
 
         return {
@@ -88,9 +88,7 @@ export class BrowserSandbox implements IBrowserSandbox {
       if (!vmResult.success) {
         const duration = Date.now() - startTime;
 
-        this.logger.error('VM execution failed', {
-          error: vmResult.error,
-        });
+        this.logger.error('VM execution failed', new Error(vmResult.error || 'Unknown error'));
 
         return {
           success: false,
@@ -213,6 +211,6 @@ export class BrowserSandbox implements IBrowserSandbox {
 /**
  * 샌드박스 인스턴스 생성
  */
-export function createBrowserSandbox(logger: Logger): BrowserSandbox {
+export function createBrowserSandbox(logger: ILogger): BrowserSandbox {
   return new BrowserSandbox(logger);
 }

@@ -41,6 +41,8 @@ export { LogLevel, LogOutput, LogLevelValue } from './types.js';
 // 로거 클래스
 export { Logger, initializeLogger, getLogger, closeLogger } from './logger.js';
 
+import { Logger } from './logger.js';
+
 /**
  * 간편 로거 생성 함수
  * @param options - 로거 옵션
@@ -53,17 +55,17 @@ export function createLogger(options?: {
   json?: boolean;
 }): Logger {
   const loggerOptions: Partial<import('./types.js').LoggerOptions> = {
-    minLevel: options?.level?.toUpperCase() as import('./types.js').LogLevel || 'INFO',
-    output: options?.console !== false ? 'console' : 'file',
+    minLevel: (options?.level?.toUpperCase() as import('./types.js').LogLevel) || 'INFO',
+    output: options?.console !== false ? ('console' as import('./types.js').LogOutput) : ('file' as import('./types.js').LogOutput),
     useColors: true,
   };
 
   if (options?.file?.enabled) {
-    loggerOptions.output = 'both';
+    loggerOptions.output = 'both' as import('./types.js').LogOutput;
     loggerOptions.logFilePath = options.file.path;
   }
 
-  return new Logger(loggerOptions);
+  return new Logger(loggerOptions as import('./types.js').LoggerOptions);
 }
 
 // 포맷터

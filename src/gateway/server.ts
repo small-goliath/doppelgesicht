@@ -11,7 +11,7 @@ import type { Logger } from '../logging/index.js';
 import type { ILLMClient } from '../llm/types.js';
 import type { IChannelAdapter } from '../channels/types.js';
 import type { ApprovalManager } from '../tools/approval/index.js';
-import type { MemoryManager } from '../memory/index.js';
+import type { SupabaseMemoryManager } from '../memory/index.js';
 import {
   JWTAuth,
   CIDRACLManager,
@@ -47,7 +47,7 @@ export class GatewayServer {
   private llmClients: ILLMClient[] = [];
   private channels: Map<string, IChannelAdapter> = new Map();
   private approvalManager?: ApprovalManager;
-  private memoryManager?: MemoryManager;
+  private memoryManager?: SupabaseMemoryManager;
   private startedAt: Date = new Date();
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
@@ -58,7 +58,7 @@ export class GatewayServer {
       llmClients?: ILLMClient[];
       channels?: IChannelAdapter[];
       approvalManager?: ApprovalManager;
-      memoryManager?: MemoryManager;
+      memoryManager?: SupabaseMemoryManager;
     }
   ) {
     this.config = config;
@@ -77,9 +77,11 @@ export class GatewayServer {
     }
     if (options?.approvalManager) {
       this.approvalManager = options.approvalManager;
+      this.logger.debug('ApprovalManager registered');
     }
     if (options?.memoryManager) {
       this.memoryManager = options.memoryManager;
+      this.logger.debug('MemoryManager registered');
     }
 
     this.setupMiddleware();
@@ -123,7 +125,7 @@ export class GatewayServer {
     });
 
     // 요청 로깅
-    this.app.use((req, res, next) => {
+    this.app.use((req, _res, next) => {
       const requestId = randomUUID();
       (req as Request & { requestId: string }).requestId = requestId;
       this.logger.debug(`${req.method} ${req.path}`, { requestId, ip: req.ip });
@@ -154,13 +156,13 @@ export class GatewayServer {
     this.app.post('/v1/channels/send', this.handleChannelSend.bind(this));
 
     // 404 핸들러
-    this.app.use((req, res) => {
+    this.app.use((_req, res) => {
       res.status(404).json(this.createErrorResponse('NOT_FOUND', 'Endpoint not found'));
     });
 
     // 에러 핸들러
     this.app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-      this.logger.error('Request error', { error: err.message, path: req.path });
+      this.logger.error('Request error', err, { path: req.path });
       res.status(500).json(this.createErrorResponse('INTERNAL_ERROR', 'Internal server error'));
     });
   }
@@ -190,7 +192,7 @@ export class GatewayServer {
   /**
    * 헬스 체크 핸들러
    */
-  private handleHealth(req: Request, res: Response): void {
+  private handleHealth(_req: Request, res: Response): void {
     const status: ServerStatus = {
       status: 'healthy',
       http: this.httpServer !== null,
@@ -206,7 +208,7 @@ export class GatewayServer {
   /**
    * 모델 목록 핸들러
    */
-  private handleModels(req: Request, res: Response): void {
+  private handleModels(_req: Request, res: Response): void {
     const models: ModelInfo[] = [
       {
         id: 'claude-3-opus-20240229',
@@ -271,7 +273,7 @@ export class GatewayServer {
         await this.handleNonStreamingChat(req, res, body, requestId);
       }
     } catch (error) {
-      this.logger.error('Chat completion error', { error: (error as Error).message });
+      this.logger.error('Chat completion error', error as Error);
       res.status(500).json(this.createErrorResponse('COMPLETION_ERROR', 'Failed to generate completion'));
     }
   }
@@ -280,10 +282,10 @@ export class GatewayServer {
    * 스트리밍 채팅 처리
    */
   private async handleStreamingChat(
-    req: Request,
+    _req: Request,
     res: Response,
     body: ChatCompletionRequest,
-    requestId: string
+    _requestId: string
   ): Promise<void> {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -331,7 +333,7 @@ export class GatewayServer {
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
-      this.logger.error('Streaming error', { error: (error as Error).message });
+      this.logger.error('Streaming error', error as Error);
       res.write(`data: ${JSON.stringify({ error: 'Streaming failed' })}\n\n`);
       res.end();
     }
@@ -341,10 +343,10 @@ export class GatewayServer {
    * 비스트리밍 채팅 처리
    */
   private async handleNonStreamingChat(
-    req: Request,
+    _req: Request,
     res: Response,
     body: ChatCompletionRequest,
-    requestId: string
+    _requestId: string
   ): Promise<void> {
     const client = this.llmClients[0];
     if (!client) {
@@ -387,7 +389,7 @@ export class GatewayServer {
   /**
    * 채널 목록 핸들러
    */
-  private handleChannels(req: Request, res: Response): void {
+  private handleChannels(_req: Request, res: Response): void {
     const channels: ChannelsListResponse['channels'] = Array.from(this.channels.entries()).map(
       ([id, adapter]) => ({
         id,
@@ -423,15 +425,19 @@ export class GatewayServer {
     }
 
     try {
-      await channel.sendMessage({
-        recipientId: body.recipientId,
-        content: body.content,
-        attachments: body.attachments,
+      await channel.send(body.recipientId, {
+        text: body.content,
+        attachments: body.attachments?.map(a => ({
+          type: a.type as 'image' | 'audio' | 'video' | 'document',
+          url: a.content,
+          filename: a.name,
+          mimetype: a.type,
+        })),
       });
 
       res.json(this.createSuccessResponse({ sent: true }));
     } catch (error) {
-      this.logger.error('Channel send error', { error: (error as Error).message });
+      this.logger.error('Channel send error', error as Error);
       res.status(500).json(this.createErrorResponse('SEND_ERROR', 'Failed to send message'));
     }
   }
@@ -468,10 +474,10 @@ export class GatewayServer {
       this.clients.set(clientId, client);
       this.logger.info('WebSocket client connected', { clientId, ip: req.socket.remoteAddress });
 
-      ws.on('message', (data) => this.handleWebSocketMessage(client, data));
+      ws.on('message', (data) => this.handleWebSocketMessage(client, data as Buffer));
       ws.on('close', () => this.handleWebSocketClose(client));
-      ws.on('error', (error) => {
-        this.logger.error('WebSocket error', { clientId, error: error.message });
+      ws.on('error', (error: Error) => {
+        this.logger.error(`WebSocket error for client ${clientId}`, error);
       });
 
       // 연결 성공 메시지
@@ -489,9 +495,17 @@ export class GatewayServer {
   /**
    * WebSocket 메시지를 처리합니다
    */
-  private handleWebSocketMessage(client: WebSocketClient, data: Buffer): void {
+  private handleWebSocketMessage(client: WebSocketClient, data: Buffer | ArrayBuffer | Buffer[]): void {
     try {
-      const message = JSON.parse(data.toString()) as WebSocketMessage;
+      let messageData: string;
+      if (Array.isArray(data)) {
+        messageData = Buffer.concat(data).toString();
+      } else if (data instanceof ArrayBuffer) {
+        messageData = Buffer.from(data).toString();
+      } else {
+        messageData = data.toString();
+      }
+      const message = JSON.parse(messageData) as WebSocketMessage;
       client.lastPingAt = new Date();
 
       switch (message.type) {
@@ -522,7 +536,7 @@ export class GatewayServer {
           });
       }
     } catch (error) {
-      this.logger.error('WebSocket message error', { error: (error as Error).message });
+      this.logger.error('WebSocket message error', error as Error);
       this.sendWebSocketMessage(client, {
         type: 'error',
         payload: { message: 'Invalid message format' },
@@ -646,7 +660,7 @@ export class GatewayServer {
       });
 
       this.httpServer.on('error', (error) => {
-        this.logger.error('HTTP server error', { error: error.message });
+        this.logger.error('HTTP server error', error);
         reject(error);
       });
     });
@@ -691,11 +705,12 @@ export class GatewayServer {
    * @returns JWT 토큰
    */
   createSessionToken(scopes: string[] = []): string {
+    const exp = Math.floor(Date.now() / 1000) + this.config.tokenExpiry;
     return this.jwtAuth.sign({
       sub: generateUserId(),
       sid: generateSessionId(),
-      exp: Math.floor(Date.now() / 1000) + this.config.tokenExpiry,
       scopes,
+      exp,
     });
   }
 
@@ -704,5 +719,19 @@ export class GatewayServer {
    */
   getConnectionCount(): number {
     return this.clients.size;
+  }
+
+  /**
+   * ApprovalManager를 반환합니다
+   */
+  getApprovalManager(): ApprovalManager | undefined {
+    return this.approvalManager;
+  }
+
+  /**
+   * MemoryManager를 반환합니다
+   */
+  getMemoryManager(): SupabaseMemoryManager | undefined {
+    return this.memoryManager;
   }
 }

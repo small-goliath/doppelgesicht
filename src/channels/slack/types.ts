@@ -76,9 +76,23 @@ export interface SlackOutgoingMessage extends OutgoingMessage {
  * Slack 첨부 파일
  */
 export interface SlackAttachment {
+  /** 파일 타입 */
+  type: 'image' | 'audio' | 'video' | 'document';
+  /** 파일 URL */
+  url: string;
+  /** 파일명 */
+  filename?: string;
+  /** MIME 타입 */
+  mimetype?: string;
+  /** 파일 크기 */
+  size?: number;
+  /** 색상 */
   color?: string;
+  /** 제목 */
   title?: string;
+  /** 텍스트 */
   text?: string;
+  /** 필드 */
   fields?: {
     title: string;
     value: string;

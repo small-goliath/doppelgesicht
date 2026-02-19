@@ -419,7 +419,7 @@ export class ApprovalManager {
   updatePolicy(policy: Partial<ApprovalPolicy>): void {
     this.config.policy = { ...this.config.policy, ...policy };
 
-    this.logger.info('Approval policy updated', this.config.policy);
+    this.logger.info('Approval policy updated', { policy: this.config.policy });
   }
 
   /**
@@ -445,7 +445,7 @@ export class ApprovalManager {
       try {
         listener(event, request);
       } catch (error) {
-        this.logger.error('Approval event listener error', { error, event });
+        this.logger.error('Approval event listener error', error as Error, { event });
       }
     }
   }

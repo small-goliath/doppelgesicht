@@ -10,7 +10,7 @@ import type { Command } from 'commander';
 import type { ILLMClient, ChatMessage, ToolCall, ToolDefinition } from '../../llm/types.js';
 import { ApprovalManager, type RiskLevel } from '../../tools/approval/index.js';
 import type { Logger } from '../../logging/index.js';
-import type { MemoryManager } from '../../memory/index.js';
+import type { SupabaseMemoryManager } from '../../memory/index.js';
 
 /**
  * 도구 정의
@@ -104,7 +104,7 @@ export class AgentCLI {
   private llmClient: ILLMClient;
   private approvalManager: ApprovalManager;
   private logger: Logger;
-  private memoryManager?: MemoryManager;
+  private memoryManager?: SupabaseMemoryManager;
   private session: AgentSession;
   private isRunning = false;
 
@@ -112,7 +112,7 @@ export class AgentCLI {
     llmClient: ILLMClient,
     approvalManager: ApprovalManager,
     logger: Logger,
-    memoryManager?: MemoryManager
+    memoryManager?: SupabaseMemoryManager
   ) {
     this.llmClient = llmClient;
     this.approvalManager = approvalManager;
@@ -124,6 +124,11 @@ export class AgentCLI {
       startTime: new Date(),
       toolCallCount: 0,
     };
+
+    // approvalManager 등록 (이벤트 리스너 등에 사용)
+    this.logger.debug('ApprovalManager initialized', {
+      pendingRequests: approvalManager.getPendingRequests().length,
+    });
   }
 
   /**
@@ -247,7 +252,7 @@ Be helpful, concise, and safe in your responses.`;
     } catch (error) {
       spinner.stop('');
       p.log.error(`Error: ${(error as Error).message}`);
-      this.logger.error('LLM response error', { error: (error as Error).message });
+      this.logger.error('LLM response error', new Error((error as Error).message));
     }
   }
 
@@ -430,7 +435,7 @@ Be helpful, concise, and safe in your responses.`;
   /**
    * 메모리에 저장합니다
    */
-  private async saveToMemory(role: 'user' | 'assistant', content: string): Promise<void> {
+  private async saveToMemory(role: 'user' | 'assistant', _content: string): Promise<void> {
     if (!this.memoryManager) return;
 
     try {
@@ -455,6 +460,13 @@ Be helpful, concise, and safe in your responses.`;
       pc.dim(`지속 시간: ${duration}초\n`) +
       pc.dim(`도구 호출: ${this.session.toolCallCount}회`)
     );
+  }
+
+  /**
+   * ApprovalManager를 반환합니다
+   */
+  getApprovalManager(): ApprovalManager {
+    return this.approvalManager;
   }
 }
 

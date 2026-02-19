@@ -15,7 +15,7 @@ import type {
   ToolCall,
   TokenUsage
 } from './types.js';
-import type { Logger } from '../logging/index.js';
+import type { ILogger } from '../logging/index.js';
 
 /**
  * Anthropic 클라이언트 구현
@@ -26,10 +26,10 @@ export class AnthropicClient implements ILLMClient {
   readonly config: LLMClientConfig;
 
   private client: Anthropic;
-  private logger: Logger;
+  private logger: ILogger;
   private lastHealthCheck?: HealthStatus;
 
-  constructor(config: LLMClientConfig, logger: Logger) {
+  constructor(config: LLMClientConfig, logger: ILogger) {
     this.id = `anthropic-${Date.now()}`;
     this.config = {
       timeout: 60000,
@@ -37,7 +37,7 @@ export class AnthropicClient implements ILLMClient {
       retryDelay: 1000,
       ...config
     };
-    this.logger = logger.child('AnthropicClient', { clientId: this.id });
+    this.logger = logger.child('AnthropicClient', { clientId: this.id }) as ILogger;
 
     this.client = new Anthropic({
       apiKey: config.apiKey,
@@ -233,6 +233,114 @@ export class AnthropicClient implements ILLMClient {
   }
 
   /**
+   * 채팅 완성 (OpenAI 스타일 API)
+   */
+  async chatCompletion(options: {
+    model: string;
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    maxTokens?: number;
+    temperature?: number;
+    tools?: Array<{
+      type: string;
+      function: {
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+      };
+    }>;
+  }): Promise<{
+    content: string;
+    stopReason?: string;
+    usage?: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    };
+  }> {
+    const response = await this.complete({
+      model: options.model,
+      messages: options.messages.map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      })),
+      max_tokens: options.maxTokens,
+      temperature: options.temperature,
+      tools: options.tools?.map(t => ({
+        type: 'function' as const,
+        function: {
+          name: t.function.name,
+          description: t.function.description,
+          parameters: {
+            type: 'object' as const,
+            properties: (t.function.parameters as { properties?: Record<string, unknown> })?.properties || {},
+            required: (t.function.parameters as { required?: string[] })?.required,
+          },
+        },
+      })),
+    });
+
+    return {
+      content: response.message.content,
+      stopReason: response.stop_reason || undefined,
+      usage: {
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+        totalTokens: response.usage.total_tokens,
+      },
+    };
+  }
+
+  /**
+   * 스트리밍 채팅 완성 (OpenAI 스타일 API)
+   */
+  async *streamChatCompletion(options: {
+    model: string;
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    maxTokens?: number;
+    temperature?: number;
+    tools?: Array<{
+      type: string;
+      function: {
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+      };
+    }>;
+  }): AsyncGenerator<{
+    content: string;
+    isComplete?: boolean;
+  }> {
+    const stream = this.stream({
+      model: options.model,
+      messages: options.messages.map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      })),
+      max_tokens: options.maxTokens,
+      temperature: options.temperature,
+      tools: options.tools?.map(t => ({
+        type: 'function' as const,
+        function: {
+          name: t.function.name,
+          description: t.function.description,
+          parameters: {
+            type: 'object' as const,
+            properties: (t.function.parameters as { properties?: Record<string, unknown> })?.properties || {},
+            required: (t.function.parameters as { required?: string[] })?.required,
+          },
+        },
+      })),
+    });
+
+    for await (const chunk of stream) {
+      yield {
+        content: chunk.content,
+        isComplete: chunk.done,
+      };
+    }
+  }
+
+  /**
    * 메시지 변환 (내부 형식 -> Anthropic)
    */
   private convertMessages(messages: ChatMessage[]): Anthropic.Messages.MessageParam[] {
@@ -335,7 +443,8 @@ export class AnthropicClient implements ILLMClient {
       return new LLMError(
         `Anthropic API error: ${error.message}`,
         error.status,
-        error.code
+        // Anthropic APIError doesn't have a code property, use status as code
+        String(error.status)
       );
     }
     return new LLMError(`Unknown error: ${(error as Error).message}`);

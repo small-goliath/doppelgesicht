@@ -1,6 +1,6 @@
 /**
  * Supabase 메모리 관리자 구현
- * @description 세션 및 메시지 관리를 위한 고수준 인터페이스 (Supabase + 로컬 캐시)
+ * @description 세션 및 메시지 관리를 위한 고수준 인터페이스 (Supabase 전용)
  */
 
 import type {
@@ -10,7 +10,6 @@ import type {
   SessionQueryOptions,
   MessageQueryOptions,
   ContextWindowConfig,
-  DatabaseConfig,
 } from '../types.js';
 import { ContextStrategy, MessageRole } from '../types.js';
 import type { SupabaseConfig } from './types.js';
@@ -21,11 +20,9 @@ import { SupabaseDatabaseManager } from './database.js';
  */
 export class SupabaseMemoryManager implements IMemoryManager {
   private supabaseDb: SupabaseDatabaseManager;
-  private useLocalCache: boolean = false;
 
   constructor(supabaseDb: SupabaseDatabaseManager) {
     this.supabaseDb = supabaseDb;
-    this.useLocalCache = supabaseDb.isLocalCacheMode();
   }
 
   /**
@@ -152,8 +149,8 @@ export class SupabaseMemoryManager implements IMemoryManager {
       session_id: data.sessionId,
       role: data.role,
       content: data.content,
-      tool_calls: data.toolCalls,
-      tool_results: data.toolResults,
+      tool_calls: data.toolCalls as Record<string, unknown>[] | undefined,
+      tool_results: data.toolResults as Record<string, unknown>[] | undefined,
       metadata: data.metadata,
     });
 
@@ -270,24 +267,6 @@ export class SupabaseMemoryManager implements IMemoryManager {
   async close(): Promise<void> {
     await this.supabaseDb.close();
   }
-
-  /**
-   * 로컬 캐시 모드 여부 확인
-   */
-  isLocalCacheMode(): boolean {
-    return this.useLocalCache;
-  }
-
-  /**
-   * Supabase 연결 재시도
-   */
-  async retryConnection(): Promise<boolean> {
-    const reconnected = await this.supabaseDb.retryConnection();
-    if (reconnected) {
-      this.useLocalCache = false;
-    }
-    return reconnected;
-  }
 }
 
 /**
@@ -299,11 +278,10 @@ let globalSupabaseMemoryManager: SupabaseMemoryManager | null = null;
  * 글로벌 Supabase 메모리 관리자 초기화
  */
 export async function initializeSupabaseMemoryManager(
-  supabaseConfig: SupabaseConfig,
-  localCacheConfig?: DatabaseConfig
+  supabaseConfig: SupabaseConfig
 ): Promise<SupabaseMemoryManager> {
   const { initializeSupabaseDatabase } = await import('./database.js');
-  const dbManager = await initializeSupabaseDatabase(supabaseConfig, localCacheConfig);
+  const dbManager = await initializeSupabaseDatabase(supabaseConfig);
   globalSupabaseMemoryManager = new SupabaseMemoryManager(dbManager);
   return globalSupabaseMemoryManager;
 }

@@ -46,6 +46,15 @@ export interface JWTPayload {
 }
 
 /**
+ * 에러 정보
+ */
+export interface APIError {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+/**
  * API 응답 표준 형식
  */
 export interface APIResponse<T = unknown> {
@@ -54,11 +63,7 @@ export interface APIResponse<T = unknown> {
   /** 응답 데이터 */
   data?: T;
   /** 에러 정보 */
-  error?: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
+  error?: APIError;
   /** 메타데이터 */
   meta?: {
     timestamp: string;

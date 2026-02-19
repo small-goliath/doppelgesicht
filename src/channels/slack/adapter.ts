@@ -3,8 +3,10 @@
  * @description @slack/bolt 4.6.0, @slack/web-api 7.14.0 기반
  */
 
-import { App, ExpressReceiver } from '@slack/bolt';
+import bolt from '@slack/bolt';
+const { App, ExpressReceiver } = bolt;
 import { WebClient } from '@slack/web-api';
+import type { App as BoltApp } from '@slack/bolt';
 import type {
   SlackConfig,
   SlackIncomingMessage,
@@ -13,7 +15,7 @@ import type {
 } from './types.js';
 import { SLACK_CAPABILITIES } from './types.js';
 import type { IChannelAdapter, ChannelConfig } from '../types.js';
-import type { Logger } from '../../logging/index.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * Slack 채널 어댑터
@@ -23,15 +25,15 @@ export class SlackAdapter implements IChannelAdapter {
   readonly name = 'Slack';
   readonly capabilities = SLACK_CAPABILITIES;
 
-  private app?: App;
+  private app?: BoltApp;
   private webClient?: WebClient;
   private config: SlackConfig;
-  private logger: Logger;
+  private logger: ILogger;
   private state: SlackAdapterState = { connected: false, socketMode: false };
   private messageHandler?: (message: SlackIncomingMessage) => void | Promise<void>;
 
-  constructor(config: ChannelConfig, logger: Logger) {
-    this.config = config as SlackConfig;
+  constructor(config: ChannelConfig, logger: ILogger) {
+    this.config = config as unknown as SlackConfig;
     this.logger = logger.child('SlackAdapter');
   }
 
@@ -39,7 +41,7 @@ export class SlackAdapter implements IChannelAdapter {
    * 어댑터 초기화
    */
   async initialize(config: ChannelConfig): Promise<void> {
-    this.config = config as SlackConfig;
+    this.config = config as unknown as SlackConfig;
     this.logger.debug('Initializing Slack adapter');
 
     // Web Client 초기화 (토큰 검증용)
@@ -150,14 +152,22 @@ export class SlackAdapter implements IChannelAdapter {
     this.logger.debug('Sending message', { channelId, textLength: message.text.length });
 
     try {
-      await this.webClient.chat.postMessage({
+      const postMessageOptions: Record<string, unknown> = {
         channel: channelId,
         text: message.text,
         thread_ts: message.threadTs,
-        blocks: message.blocks,
-        attachments: message.attachments,
         mrkdwn: message.mrkdwn ?? true,
-      });
+      };
+
+      if (message.blocks) {
+        postMessageOptions.blocks = message.blocks;
+      }
+
+      if (message.attachments) {
+        postMessageOptions.attachments = message.attachments;
+      }
+
+      await this.webClient.chat.postMessage(postMessageOptions as unknown as import('@slack/web-api').ChatPostMessageArguments);
 
       this.logger.debug('Message sent successfully');
     } catch (error) {
@@ -235,21 +245,24 @@ export class SlackAdapter implements IChannelAdapter {
     if (!this.app) return;
 
     // 일반 메시지 핸들러
-    this.app.message(async ({ message, say, context }) => {
+    this.app.message(async (args) => {
+      const { message } = args as unknown as { message: Record<string, unknown> };
       // bot_message 필터링
       if (message.subtype === 'bot_message') return;
 
-      await this.handleMessage(message as Record<string, unknown>);
+      await this.handleMessage(message);
     });
 
     // 멘션 핸들러
-    this.app.event('app_mention', async ({ event }) => {
-      await this.handleMessage(event as Record<string, unknown>);
+    this.app.event('app_mention', async (args) => {
+      const { event } = args as unknown as { event: Record<string, unknown> };
+      await this.handleMessage(event);
     });
 
     // DM 핸들러
-    this.app.event('message.im', async ({ event }) => {
-      await this.handleMessage(event as Record<string, unknown>);
+    this.app.event('message.im', async (args) => {
+      const { event } = args as unknown as { event: Record<string, unknown> };
+      await this.handleMessage(event);
     });
   }
 

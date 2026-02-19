@@ -4,7 +4,6 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
-import { promisify } from 'util';
 import type {
   BashExecuteOptions,
   BashExecuteResult,
@@ -12,9 +11,7 @@ import type {
   RunningProcess,
   IBashTool,
 } from './types.js';
-import type { Logger } from '../../logging/index.js';
-
-const setTimeoutPromise = promisify(setTimeout);
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * 위험한 명령어 패턴
@@ -35,17 +32,17 @@ const DANGEROUS_PATTERNS = [
 export class BashTool implements IBashTool {
   readonly config: BashToolConfig;
 
-  private logger: Logger;
+  private logger: ILogger;
   private runningProcesses = new Map<number, ChildProcess>();
 
-  constructor(config: Partial<BashToolConfig>, logger: Logger) {
+  constructor(config: Partial<BashToolConfig>, logger: ILogger) {
     this.config = {
       defaultTimeout: 30000,
       maxOutputSize: 1024 * 1024, // 1MB
       requireApprovalForDangerous: true,
       ...config,
     };
-    this.logger = logger.child('BashTool');
+    this.logger = logger.child('BashTool') as ILogger;
   }
 
   /**
@@ -259,6 +256,6 @@ export class BashTool implements IBashTool {
 /**
  * Bash 도구 인스턴스 생성
  */
-export function createBashTool(config: Partial<BashToolConfig>, logger: Logger): BashTool {
+export function createBashTool(config: Partial<BashToolConfig>, logger: ILogger): BashTool {
   return new BashTool(config, logger);
 }

@@ -21,10 +21,12 @@ export class JWTAuth {
    * @param payload - JWT 페이로드
    * @returns JWT 토큰
    */
-  sign(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
+  sign(payload: Omit<JWTPayload, 'iat' | 'exp'> & { exp?: number }): string {
     const now = Math.floor(Date.now() / 1000);
     const fullPayload: JWTPayload = {
-      ...payload,
+      sub: payload.sub,
+      sid: payload.sid,
+      scopes: payload.scopes,
       iat: now,
       exp: payload.exp || now + 3600,
     };

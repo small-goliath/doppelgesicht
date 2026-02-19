@@ -53,7 +53,7 @@ async function handleAuthList(): Promise<void> {
       console.log(`  ID: ${pc.dim(profile.id)}`);
       console.log(`  제공자: ${providerColor(profile.provider)}`);
       console.log(`  방식: ${pc.dim(profile.type)}`);
-      console.log(`  우선순위: ${pc.dim(profile.priority)}`);
+      console.log(`  우선순위: ${pc.dim(String(profile.priority))}`);
       console.log(`  상태: ${healthColor(profile.health.status)}`);
       console.log(`  마지막 사용: ${profile.lastUsed ? new Date(profile.lastUsed).toLocaleString() : pc.dim('미사용')}`);
       console.log();
@@ -84,6 +84,7 @@ async function handleAuthAdd(): Promise<void> {
         if (!value || value.trim().length === 0) {
           return '이름을 입력하세요.';
         }
+        return undefined;
       },
     });
 
@@ -164,6 +165,7 @@ async function handleAuthAdd(): Promise<void> {
         if (isNaN(num) || num < 0) {
           return '0 이상의 숫자를 입력하세요.';
         }
+        return undefined;
       },
     });
 
@@ -189,6 +191,7 @@ async function handleAuthAdd(): Promise<void> {
           if (isNaN(num) || num < 1) {
             return '1 이상의 숫자를 입력하세요.';
           }
+          return undefined;
         },
       });
 

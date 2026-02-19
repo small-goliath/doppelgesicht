@@ -149,14 +149,61 @@ export interface ILLMClient {
   readonly config: LLMClientConfig;
 
   /**
-   * 완전 응답 생성
+   * 완전 응답 생성 (별칭: complete)
    */
   complete(options: LLMRequestOptions): Promise<LLMResponse>;
 
   /**
-   * 스트리밍 응답 생성
+   * 채팅 완성 (OpenAI 스타일 API)
+   */
+  chatCompletion(options: {
+    model: string;
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    maxTokens?: number;
+    temperature?: number;
+    tools?: Array<{
+      type: string;
+      function: {
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+      };
+    }>;
+  }): Promise<{
+    content: string;
+    stopReason?: string;
+    usage?: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    };
+  }>;
+
+  /**
+   * 스트리밍 응답 생성 (별칭: stream)
    */
   stream(options: LLMRequestOptions): AsyncGenerator<LLMStreamChunk>;
+
+  /**
+   * 스트리밍 채팅 완성 (OpenAI 스타일 API)
+   */
+  streamChatCompletion(options: {
+    model: string;
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    maxTokens?: number;
+    temperature?: number;
+    tools?: Array<{
+      type: string;
+      function: {
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+      };
+    }>;
+  }): AsyncGenerator<{
+    content: string;
+    isComplete?: boolean;
+  }>;
 
   /**
    * 클라이언트 상태 확인

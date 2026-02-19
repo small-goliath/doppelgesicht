@@ -10,19 +10,19 @@ import type {
   BrowserConsoleLog,
 } from './types.js';
 import { DEFAULT_PLAYWRIGHT_CONFIG } from './types.js';
-import type { Logger } from '../../logging/index.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * Playwright 실행기
  */
 export class PlaywrightRunner {
   private config: PlaywrightConfig;
-  private logger: Logger;
+  private logger: ILogger;
   private browser?: Browser;
   private context?: BrowserContext;
 
-  constructor(logger: Logger, config?: Partial<PlaywrightConfig>) {
-    this.logger = logger.child('PlaywrightRunner');
+  constructor(logger: ILogger, config?: Partial<PlaywrightConfig>) {
+    this.logger = logger.child('PlaywrightRunner') as ILogger;
     this.config = { ...DEFAULT_PLAYWRIGHT_CONFIG, ...config };
   }
 
@@ -138,8 +138,8 @@ export class PlaywrightRunner {
       // 스크린샷 캡처 (옵션)
       let screenshot: string | undefined;
       if (!this.config.headless) {
-        const screenshotBuffer = await page.screenshot({ encoding: 'base64' });
-        screenshot = screenshotBuffer;
+        const screenshotBuffer = await page.screenshot({ type: 'png' });
+        screenshot = screenshotBuffer.toString('base64');
       }
 
       const duration = Date.now() - startTime;
@@ -236,7 +236,7 @@ export class PlaywrightRunner {
  * Playwright 실행기 인스턴스 생성
  */
 export function createPlaywrightRunner(
-  logger: Logger,
+  logger: ILogger,
   config?: Partial<PlaywrightConfig>
 ): PlaywrightRunner {
   return new PlaywrightRunner(logger, config);

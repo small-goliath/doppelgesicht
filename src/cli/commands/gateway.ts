@@ -98,7 +98,7 @@ class GatewayCLI {
       // 5. 종료 처리
       this.setupShutdownHandlers();
     } catch (error) {
-      this.logger.error('Gateway failed', { error: (error as Error).message });
+      this.logger.error('Gateway failed', error as Error);
       p.outro(pc.red('Gateway 실행 중 오류가 발생했습니다.'));
       process.exit(1);
     }
@@ -199,7 +199,10 @@ class GatewayCLI {
           jwtSecret: config.gateway.auth?.jwtSecret || 'default-secret',
           tokenExpiry: config.gateway.auth?.tokenExpiry || 3600,
           cors: config.gateway.cors,
-          acl: ['127.0.0.1/32', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
+          acl: {
+            allow: ['127.0.0.1/32', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
+            deny: [],
+          },
         },
         this.logger,
         {
@@ -248,12 +251,12 @@ class GatewayCLI {
         if (profile.provider === 'anthropic') {
           const credentials = profileManager.getDecryptedCredentials(profile.id);
           if (credentials?.type === 'api_key') {
-            clients.push(new AnthropicClient(credentials.apiKey));
+            clients.push(new AnthropicClient({ provider: 'anthropic', apiKey: credentials.apiKey }, this.logger));
           }
         } else if (profile.provider === 'openai') {
           const credentials = profileManager.getDecryptedCredentials(profile.id);
           if (credentials?.type === 'api_key') {
-            clients.push(new OpenAIClient(credentials.apiKey));
+            clients.push(new OpenAIClient({ provider: 'openai', apiKey: credentials.apiKey }, this.logger));
           }
         }
       }
@@ -289,7 +292,7 @@ class GatewayCLI {
         channels.push(telegramAdapter);
         this.logger.info('Telegram channel initialized');
       } catch (error) {
-        this.logger.error('Failed to initialize Telegram channel', { error: (error as Error).message });
+        this.logger.error('Failed to initialize Telegram channel', error as Error);
       }
     }
 
@@ -311,7 +314,7 @@ class GatewayCLI {
         channels.push(slackAdapter);
         this.logger.info('Slack channel initialized');
       } catch (error) {
-        this.logger.error('Failed to initialize Slack channel', { error: (error as Error).message });
+        this.logger.error('Failed to initialize Slack channel', error as Error);
       }
     }
 
@@ -347,7 +350,7 @@ class GatewayCLI {
         p.outro(pc.green('서버가 안전하게 종료되었습니다.'));
         process.exit(0);
       } catch (error) {
-        this.logger.error('Shutdown error', { error: (error as Error).message });
+        this.logger.error('Shutdown error', error as Error);
         process.exit(1);
       }
     };

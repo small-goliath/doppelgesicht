@@ -116,7 +116,7 @@ class BrowserCLI {
       // 성공 여부에 따라 종료 코드 설정
       process.exit(result.success ? 0 : 1);
     } catch (error) {
-      this.logger.error('Browser CLI failed', { error: (error as Error).message });
+      this.logger.error('Browser CLI failed', error as Error);
       p.outro(pc.red('실행 중 오류가 발생했습니다.'));
       process.exit(1);
     }

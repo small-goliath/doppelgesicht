@@ -9,17 +9,17 @@ import type {
   StaticAnalysisViolation,
 } from './types.js';
 import { DEFAULT_STATIC_RULES } from './types.js';
-import type { Logger } from '../../logging/index.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * 정적 분석기
  */
 export class StaticAnalyzer {
   private rules: StaticAnalysisRule[];
-  private logger: Logger;
+  private logger: ILogger;
 
-  constructor(logger: Logger, rules?: StaticAnalysisRule[]) {
-    this.logger = logger.child('StaticAnalyzer');
+  constructor(logger: ILogger, rules?: StaticAnalysisRule[]) {
+    this.logger = logger.child('StaticAnalyzer') as ILogger;
     this.rules = rules ?? DEFAULT_STATIC_RULES;
   }
 
@@ -112,6 +112,6 @@ export class StaticAnalyzer {
 /**
  * 정적 분석기 인스턴스 생성
  */
-export function createStaticAnalyzer(logger: Logger, rules?: StaticAnalysisRule[]): StaticAnalyzer {
+export function createStaticAnalyzer(logger: ILogger, rules?: StaticAnalysisRule[]): StaticAnalyzer {
   return new StaticAnalyzer(logger, rules);
 }

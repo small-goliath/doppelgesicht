@@ -135,7 +135,6 @@ export class ApprovalUI {
     request: ApprovalRequest,
     timeoutSeconds: number
   ): Promise<ApprovalUIResult> {
-    const startTime = Date.now();
     const timeoutMs = timeoutSeconds * 1000;
 
     // 타임아웃 타이머 설정

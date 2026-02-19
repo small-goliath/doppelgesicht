@@ -116,7 +116,7 @@ class MessageCLI {
       }
 
       // 4. 수신자 확인
-      let recipientId = this.options.recipient;
+      let recipientId: string | null | undefined = this.options.recipient;
       if (!recipientId) {
         recipientId = await this.promptForRecipient(channelId);
         if (!recipientId) {
@@ -142,7 +142,7 @@ class MessageCLI {
       await this.cleanup();
       process.exit(0);
     } catch (error) {
-      this.logger.error('Message send failed', { error: (error as Error).message });
+      this.logger.error('Message send failed', error as Error);
       p.outro(pc.red('전송 중 오류가 발생했습니다.'));
       process.exit(1);
     }
@@ -225,7 +225,7 @@ class MessageCLI {
       p.outro(pc.green('조회 완료'));
       process.exit(0);
     } catch (error) {
-      this.logger.error('Channel list failed', { error: (error as Error).message });
+      this.logger.error('Channel list failed', error as Error);
       p.outro(pc.red('조회 중 오류가 발생했습니다.'));
       process.exit(1);
     }
@@ -280,7 +280,7 @@ class MessageCLI {
       await this.cleanup();
       process.exit(0);
     } catch (error) {
-      this.logger.error('Channel test failed', { error: (error as Error).message });
+      this.logger.error('Channel test failed', error as Error);
       p.outro(pc.red('테스트 중 오류가 발생했습니다.'));
       process.exit(1);
     }

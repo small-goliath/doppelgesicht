@@ -6,17 +6,17 @@
 import ivm from 'isolated-vm';
 import type { IsolatedVMConfig, IsolatedVMResult } from './types.js';
 import { DEFAULT_VM_CONFIG } from './types.js';
-import type { Logger } from '../../logging/index.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * VM 실행기
  */
 export class VMRunner {
   private config: IsolatedVMConfig;
-  private logger: Logger;
+  private logger: ILogger;
 
-  constructor(logger: Logger, config?: Partial<IsolatedVMConfig>) {
-    this.logger = logger.child('VMRunner');
+  constructor(logger: ILogger, config?: Partial<IsolatedVMConfig>) {
+    this.logger = logger.child('VMRunner') as ILogger;
     this.config = { ...DEFAULT_VM_CONFIG, ...config };
   }
 
@@ -165,6 +165,6 @@ export class VMRunner {
 /**
  * VM 실행기 인스턴스 생성
  */
-export function createVMRunner(logger: Logger, config?: Partial<IsolatedVMConfig>): VMRunner {
+export function createVMRunner(logger: ILogger, config?: Partial<IsolatedVMConfig>): VMRunner {
   return new VMRunner(logger, config);
 }

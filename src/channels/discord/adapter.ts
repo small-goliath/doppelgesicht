@@ -13,7 +13,7 @@ import type {
 } from './types.js';
 import { DISCORD_CAPABILITIES } from './types.js';
 import type { IChannelAdapter, ChannelConfig, IncomingMessage } from '../types.js';
-import type { Logger } from '../../logging/index.js';
+import type { ILogger } from '../../logging/index.js';
 
 /**
  * Discord 채널 어댑터
@@ -25,12 +25,12 @@ export class DiscordAdapter implements IChannelAdapter {
 
   private client?: Client;
   private config: DiscordConfig;
-  private logger: Logger;
+  private logger: ILogger;
   private state: DiscordAdapterState = { connected: false };
   private messageHandler?: (message: DiscordIncomingMessage) => void | Promise<void>;
   private startTime?: Date;
 
-  constructor(config: ChannelConfig, logger: Logger) {
+  constructor(config: ChannelConfig, logger: ILogger) {
     this.config = config as unknown as DiscordConfig;
     this.logger = logger.child('DiscordAdapter');
   }
@@ -91,7 +91,7 @@ export class DiscordAdapter implements IChannelAdapter {
           reject(new Error('Discord bot login timeout'));
         }, 30000);
 
-        this.client!.once('ready' as typeof Events.Ready, () => {
+        this.client!.once(Events.ClientReady, () => {
           clearTimeout(timeout);
           resolve();
         });
