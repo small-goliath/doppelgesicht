@@ -327,12 +327,14 @@ class OnboardWizard {
   private async setupChannels(): Promise<{
     telegram?: { botToken: string };
     slack?: { appToken: string; botToken: string };
+    discord?: { botToken: string };
   }> {
     p.log.step('📱 채널 설정 (선택사항)');
 
     const channels: {
       telegram?: { botToken: string };
       slack?: { appToken: string; botToken: string };
+      discord?: { botToken: string };
     } = {};
 
     // Telegram 설정
@@ -390,6 +392,28 @@ class OnboardWizard {
       }
     }
 
+    // Discord 설정
+    const setupDiscord = await p.confirm({
+      message: 'Discord 봇을 설정하시겠습니까?',
+      initialValue: false,
+    });
+
+    if (!p.isCancel(setupDiscord) && setupDiscord) {
+      const botToken = await p.password({
+        message: 'Discord Bot Token을 입력하세요:',
+        validate: (value) => {
+          if (!value || value.length < 50) {
+            return '유효한 Bot Token을 입력하세요'
+          }
+        },
+      });
+
+      if (!p.isCancel(botToken)) {
+        channels.discord = { botToken };
+        p.log.success('Discord 설정이 완료되었습니다.');
+      }
+    }
+
     return channels;
   }
 
@@ -401,6 +425,7 @@ class OnboardWizard {
     channelConfig: {
       telegram?: { botToken: string };
       slack?: { appToken: string; botToken: string };
+      discord?: { botToken: string };
     }
   ): AppConfig {
     return {
@@ -412,7 +437,7 @@ class OnboardWizard {
         temperature: 0.7,
       },
       channels: {
-        enabled: !!(channelConfig.telegram || channelConfig.slack),
+        enabled: !!(channelConfig.telegram || channelConfig.slack || channelConfig.discord),
         telegram: channelConfig.telegram
           ? {
               botToken: channelConfig.telegram.botToken,
@@ -424,6 +449,15 @@ class OnboardWizard {
               appToken: channelConfig.slack.appToken,
               botToken: channelConfig.slack.botToken,
               allowedUsers: [],
+            }
+          : undefined,
+        discord: channelConfig.discord
+          ? {
+              botToken: channelConfig.discord.botToken,
+              allowedUsers: [],
+              allowedChannels: [],
+              allowedGuilds: [],
+              allowDMs: true,
             }
           : undefined,
       },

@@ -1,6 +1,6 @@
 /**
  * 채널 모듈
- * @description 다양한 메신저 채널(Telegram, Slack 등) 통합
+ * @description 다양한 메신저 채널(Telegram, Slack, Discord 등) 통합
  */
 
 export type {
@@ -15,3 +15,4 @@ export type {
 
 export * as telegram from './telegram/index.js';
 export * as slack from './slack/index.js';
+export * as discord from './discord/index.js';

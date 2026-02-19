@@ -10,6 +10,7 @@ import { ConfigManager } from '../../core/config-manager.js';
 import { createLogger } from '../../logging/index.js';
 import { TelegramAdapter } from '../../channels/telegram/adapter.js';
 import { SlackAdapter } from '../../channels/slack/adapter.js';
+import { DiscordAdapter } from '../../channels/discord/adapter.js';
 import type { IChannelAdapter, OutgoingMessage } from '../../channels/types.js';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -30,7 +31,7 @@ export function registerMessageCommand(program: Command): void {
   messageCmd
     .command('send')
     .description('메시지를 전송합니다')
-    .requiredOption('-c, --channel <channelId>', '채널 ID (telegram, slack)')
+    .requiredOption('-c, --channel <channelId>', '채널 ID (telegram, slack, discord)')
     .requiredOption('-t, --text <text>', '전송할 메시지')
     .option('-r, --recipient <recipientId>', '수신자 ID (사용자 ID 또는 채널 ID)')
     .option('--config <path>', '설정 파일 경로', DEFAULT_CONFIG_PATH)
@@ -53,7 +54,7 @@ export function registerMessageCommand(program: Command): void {
   messageCmd
     .command('test')
     .description('채널 연결을 테스트합니다')
-    .requiredOption('-c, --channel <channelId>', '채널 ID (telegram, slack)')
+    .requiredOption('-c, --channel <channelId>', '채널 ID (telegram, slack, discord)')
     .option('--config <path>', '설정 파일 경로', DEFAULT_CONFIG_PATH)
     .action(async (options) => {
       const messageCLI = new MessageCLI(options);
@@ -187,6 +188,15 @@ class MessageCLI {
         name: 'Slack',
         enabled: config.channels.enabled && slackConfigured,
         configured: slackConfigured,
+      });
+
+      // Discord
+      const discordConfigured = !!config.channels.discord?.botToken;
+      channels.push({
+        id: 'discord',
+        name: 'Discord',
+        enabled: config.channels.enabled && discordConfigured,
+        configured: discordConfigured,
       });
 
       for (const channel of channels) {
@@ -338,6 +348,30 @@ class MessageCLI {
         }
       }
 
+      // Discord 채널 초기화
+      if (config.channels.discord?.botToken) {
+        try {
+          const discordAdapter = new DiscordAdapter(
+            {
+              id: 'discord',
+              name: 'Discord',
+              enabled: true,
+              botToken: config.channels.discord.botToken,
+              allowedUsers: config.channels.discord.allowedUsers || [],
+              allowedChannels: config.channels.discord.allowedChannels || [],
+              allowedGuilds: config.channels.discord.allowedGuilds || [],
+              allowDMs: config.channels.discord.allowDMs ?? true,
+            } as import('../../channels/types.js').ChannelConfig,
+            this.logger
+          );
+          await discordAdapter.start();
+          this.channels.set('discord', discordAdapter);
+          p.log.success('Discord 채널이 초기화되었습니다.');
+        } catch (error) {
+          p.log.warn(`Discord 채널 초기화 실패: ${(error as Error).message}`);
+        }
+      }
+
       if (this.channels.size === 0) {
         p.log.warn('활성화된 채널이 없습니다.');
         p.log.info(pc.dim('`doppelgesicht onboard`를 실행하여 채널을 설정하세요.'));
@@ -358,9 +392,16 @@ class MessageCLI {
     const channel = this.channels.get(channelId);
     if (!channel) return null;
 
+    const placeholder =
+      channelId === 'telegram'
+        ? '123456789'
+        : channelId === 'slack'
+          ? 'C1234567890'
+          : '1234567890123456789';
+
     const recipient = await p.text({
       message: `${channel.name} 수신자 ID를 입력하세요:`,
-      placeholder: channelId === 'telegram' ? '123456789' : 'C1234567890',
+      placeholder,
     });
 
     if (p.isCancel(recipient)) {
@@ -375,19 +416,32 @@ class MessageCLI {
    */
   private showChannelSetupGuide(channelId: string): void {
     console.log();
+
+    let configExample = '';
+    if (channelId === 'telegram') {
+      configExample =
+        `   ${pc.dim('channels:')}\n` +
+        `   ${pc.dim('  telegram:')}\n` +
+        `   ${pc.dim('    botToken: "YOUR_BOT_TOKEN"')}`;
+    } else if (channelId === 'slack') {
+      configExample =
+        `   ${pc.dim('channels:')}\n` +
+        `   ${pc.dim('  slack:')}\n` +
+        `   ${pc.dim('    appToken: "xapp-..."')}\n` +
+        `   ${pc.dim('    botToken: "xoxb-..."')}`;
+    } else if (channelId === 'discord') {
+      configExample =
+        `   ${pc.dim('channels:')}\n` +
+        `   ${pc.dim('  discord:')}\n` +
+        `   ${pc.dim('    botToken: "YOUR_BOT_TOKEN"')}`;
+    }
+
     p.note(
       `${pc.cyan('채널 설정 방법:')}\n\n` +
       `1. 설정 파일 열기:\n` +
       `   ${pc.dim('~/.doppelgesicht/config.yaml')}\n\n` +
       `2. ${channelId} 설정 추가:\n` +
-      (channelId === 'telegram'
-        ? `   ${pc.dim('channels:')}\n` +
-          `   ${pc.dim('  telegram:')}\n` +
-          `   ${pc.dim('    botToken: "YOUR_BOT_TOKEN"')}`
-        : `   ${pc.dim('channels:')}\n` +
-          `   ${pc.dim('  slack:')}\n` +
-          `   ${pc.dim('    appToken: "xapp-..."')}\n` +
-          `   ${pc.dim('    botToken: "xoxb-..."')}`) +
+      configExample +
       `\n\n3. 설정 후 다시 시도하세요.`,
       '설정 안내'
     );
