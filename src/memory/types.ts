@@ -1,6 +1,6 @@
 /**
  * 메모리 시스템 타입 정의
- * @description SQLite 기반 대화 기록 저장을 위한 타입 시스템
+ * @description Supabase PostgreSQL 기반 대화 기록 저장을 위한 타입 시스템
  */
 
 /**
@@ -110,22 +110,6 @@ export enum ContextStrategy {
 }
 
 /**
- * 데이터베이스 설정
- */
-export interface DatabaseConfig {
-  /** 데이터베이스 파일 경로 */
-  dbPath: string;
-  /** 동시 접근 큐 크기 */
-  queueSize: number;
-  /** 타임아웃 (ms) */
-  timeout: number;
-  /** WAL 모드 사용 여부 */
-  walMode: boolean;
-  /** 동기화 모드 */
-  synchronous: 'OFF' | 'NORMAL' | 'FULL' | 'EXTRA';
-}
-
-/**
  * 세션 조회 옵션
  */
 export interface SessionQueryOptions {
@@ -189,38 +173,4 @@ export interface IMemoryManager {
   getContextWindow(sessionId: string): Promise<Message[]>;
   /** 데이터베이스 연결 종료 */
   close(): Promise<void>;
-}
-
-/**
- * 데이터베이스 연결 인터페이스
- */
-export interface IDatabaseConnection {
-  /** SQL 실행 */
-  exec(sql: string): void;
-  /** 준비된 문 생성 */
-  prepare(sql: string): unknown;
-  /** 트랜잭션 실행 */
-  transaction<T>(fn: () => T): T;
-  /** 백업 생성 */
-  backup(destination: string): Promise<void>;
-  /** 연결 종료 */
-  close(): void;
-}
-
-/**
- * 접근 큐 작업
- */
-export interface QueueTask<T> {
-  /** 작업 ID */
-  id: string;
-  /** 작업 함수 */
-  execute: () => Promise<T>;
-  /** 타임아웃 (ms) */
-  timeout: number;
-  /** 작업 생성 시간 */
-  createdAt: Date;
-  /** 작업 완료 콜백 */
-  resolve: (value: T) => void;
-  /** 작업 실패 콜백 */
-  reject: (error: Error) => void;
 }

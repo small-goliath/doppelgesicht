@@ -2,25 +2,24 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { GatewayServer } from '../../src/gateway/server.js';
 import { TelegramAdapter } from '../../src/channels/telegram/adapter.js';
 import { AnthropicClient } from '../../src/llm/anthropic.js';
-import { MemoryManager } from '../../src/memory/manager.js';
-import { DatabaseManager } from '../../src/memory/database.js';
+import {
+  SupabaseMemoryManager,
+  initializeSupabaseMemoryManager,
+} from '../../src/memory/supabase/manager.js';
+import { SupabaseDatabaseManager } from '../../src/memory/supabase/database.js';
 import { ApprovalManager } from '../../src/tools/approval/manager.js';
 import type { GatewayServerConfig } from '../../src/gateway/types.js';
 import type { Logger } from '../../src/logging/types.js';
 import type { TelegramConfig } from '../../src/channels/telegram/types.js';
 import type { LLMClientConfig } from '../../src/llm/types.js';
-import { mkdirSync, rmSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 /**
  * E2E Test: Normal Flow
  * onboard → gateway 시작 → Telegram 메시지 → AI 응답
  */
 describe('E2E: Normal Flow', () => {
-  let tempDir: string;
-  let dbManager: DatabaseManager;
-  let memoryManager: MemoryManager;
+  let dbManager: SupabaseDatabaseManager;
+  let memoryManager: SupabaseMemoryManager;
   let gatewayServer: GatewayServer;
   let telegramAdapter: TelegramAdapter;
   let anthropicClient: AnthropicClient;
@@ -29,10 +28,6 @@ describe('E2E: Normal Flow', () => {
   let authToken: string;
 
   beforeAll(async () => {
-    // Setup temp directory
-    tempDir = join(tmpdir(), `doppelgesicht-e2e-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
-
     // Mock logger
     mockLogger = {
       debug: vi.fn(),
@@ -44,12 +39,17 @@ describe('E2E: Normal Flow', () => {
       close: vi.fn().mockResolvedValue(undefined),
     } as unknown as Logger;
 
-    // Initialize memory system
-    dbManager = new DatabaseManager({
-      dbPath: join(tempDir, 'memory.db'),
+    // Initialize Supabase memory system
+    // Note: These should be set in environment variables for actual tests
+    const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || 'test-key';
+
+    dbManager = new SupabaseDatabaseManager({
+      url: supabaseUrl,
+      anonKey: supabaseKey,
     });
     await dbManager.initialize();
-    memoryManager = new MemoryManager(dbManager);
+    memoryManager = initializeSupabaseMemoryManager(dbManager);
 
     // Initialize approval manager
     approvalManager = new ApprovalManager(
@@ -122,11 +122,7 @@ describe('E2E: Normal Flow', () => {
   afterAll(async () => {
     await gatewayServer.stop();
     await telegramAdapter.stop();
-    memoryManager.close();
-
-    if (existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
+    await memoryManager.close();
   });
 
   describe('Step 1: Gateway Health Check', () => {

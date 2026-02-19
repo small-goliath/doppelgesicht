@@ -1,0 +1,330 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "프로젝트 초기 설정 및 기본 구조 구축",
+        "description": "doppelgesicht 프로젝트의 기본 구조를 설정합니다.\n\n**요구사항**:\n- Node.js 22.12.0+, TypeScript 5.9+, pnpm 10.23.0 환경 설정\n- package.json 생성 (의존성 정의)\n- tsconfig.json 설정\n- 기본 디렉토리 구조 생성 (src/, dist/, tests/)\n- .gitignore 설정\n\n**검증 기준**:\n- pnpm install 실행 가능\n- TypeScript 컴파일 테스트\n- 기본 디렉토리 구조 확인",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T04:55:45.742Z"
+      },
+      {
+        "id": "2",
+        "title": "마스터 키 파생 및 암호화 시스템 구현 (F001)",
+        "description": "Argon2id 기반 마스터 키 생성 및 AES-256-GCM 암호화 시스템을 구현합니다.\n\n**요구사항**:\n- Argon2id 파라미터: memoryCost=65536, timeCost=3, parallelism=4, saltLength=32, hashLength=32\n- AES-256-GCM 암호화: 256-bit salt, 12-byte nonce, 16-byte auth tag\n- 마스터 키 파생 함수 구현\n- 암호화/복호화 유틸리티 구현\n- OS 키체인 통합 (macOS/Windows/Linux)\n\n**의존성**: Task 1\n\n**검증 기준**:\n- 마스터 키 파생 테스트\n- 암호화/복호화 정합성 테스트\n- 키체인 통합 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T04:58:22.265Z"
+      },
+      {
+        "id": "3",
+        "title": "Auth Profile 관리 시스템 구현 (F003)",
+        "description": "다중 LLM 프로파일 저장, fallback 체인, rate limiting을 구현합니다.\n\n**요구사항**:\n- AuthProfile 모델 구현 (id, provider, type, credentials, rateLimits, health, lastUsed, failCount, priority)\n- 프로파일 CRUD 작업\n- AES-256-GCM 암호화된 자격 증명 저장\n- 프로파일 우선순위/fallback 설정\n- rate limit 및 health check 설정 (기본값: 60req/min)\n- 프로파일 상태 모니터링 (healthy/degraded/cooldown)\n\n**의존성**: Task 2\n\n**검증 기준**:\n- 프로파일 CRUD 테스트\n- 암호화 저장/복호화 테스트\n- fallback 체인 동작 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "2"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:03:59.562Z"
+      },
+      {
+        "id": "4",
+        "title": "설정 파일 관리 시스템 구현 (F011)",
+        "description": "YAML 기반 설정, 환경변수 참조, 핫 리로드 기능을 구현합니다.\n\n**요구사항**:\n- YAML 설정 파일 읽기/쓰기\n- 환경변수 참조 해석 (${VAR} 문법)\n- 설정 스키마 검증 (Zod 스키마)\n- 핫 리로드 트리거 (파일 변경 감시)\n- 설정 파일 구조: ~/.doppelgesicht/config.yaml\n\n**의존성**: Task 1\n\n**검증 기준**:\n- YAML 파싱/저장 테스트\n- 환경변수 치환 테스트\n- 스키마 검증 테스트\n- 핫 리로드 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:07:02.935Z"
+      },
+      {
+        "id": "5",
+        "title": "로깅 시스템 구현 (F012)",
+        "description": "구조화된 JSON 로깅, 디버그 모드를 구현합니다.\n\n**요구사항**:\n- 구조화된 JSON 로깅 포맷\n- 로그 레벨 지원 (debug, info, warn, error)\n- 환경별 로그 설정\n- 로그 파일 로테이션\n- 콘솔 출력 포맷팅\n\n**의존성**: Task 1\n\n**검증 기준**:\n- JSON 로그 출력 테스트\n- 로그 레벨 필터링 테스트\n- 파일 로테이션 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:23:14.269Z"
+      },
+      {
+        "id": "6",
+        "title": "메모리 시스템 (SQLite) 구현 (F008)",
+        "description": "SQLite 기반 대화 기록 저장, 문맥 관리 시스템을 구현합니다.\n\n**요구사항**:\n- better-sqlite3 드라이버 사용\n- 동시성 제어 (접근 큐잉)\n- Session 모델 구현 (id, channelId, userId, messages, contextWindow, createdAt, updatedAt)\n- Message 모델 구현 (role, content, timestamp)\n- 대화 기록 CRUD\n- 컨텍스트 윈도우 관리\n\n**의존성**: Task 1\n\n**검증 기준**:\n- SQLite 연결 테스트\n- CRUD 작업 테스트\n- 동시성 제어 테스트\n- 컨텍스트 윈도우 관리 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:23:14.494Z"
+      },
+      {
+        "id": "7",
+        "title": "LLM 클라이언트 통합 구현 (F002)",
+        "description": "Anthropic Claude, OpenAI GPT API 연동을 구현합니다.\n\n**요구사항**:\n- @anthropic-ai/sdk 0.24.3 연동\n- openai 4.x 연동\n- 스트리밍 응답 지원\n- API 키 기반 인증\n- 에러 처리 및 재시도 로직\n- fallback 프로파일 자동 전환\n\n**의존성**: Task 3, Task 5\n\n**검증 기준**:\n- Anthropic API 호출 테스트\n- OpenAI API 호출 테스트\n- 스트리밍 응답 테스트\n- fallback 동작 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "3",
+          "5"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:36:12.342Z"
+      },
+      {
+        "id": "8",
+        "title": "Telegram 채널 연동 구현 (F004)",
+        "description": "Telegram Bot API를 통한 메시지 수신/발신을 구현합니다.\n\n**요구사항**:\n- grammy 1.40.0 사용\n- 봇 토큰 검증 (getMe 호출)\n- 메시지 수신 핸들러\n- 메시지 발신 기능\n- allowed_users 화이트리스트 관리\n- 채널 어댑터 인터페이스 구현\n\n**의존성**: Task 4, Task 5\n\n**검증 기준**:\n- 봇 토큰 검증 테스트\n- 메시지 수신 테스트\n- 메시지 발신 테스트\n- 화이트리스트 필터링 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "4",
+          "5"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:36:12.782Z"
+      },
+      {
+        "id": "9",
+        "title": "Slack 채널 연동 구현 (F005)",
+        "description": "Slack Bolt를 통한 메시지 수신/발신을 구현합니다.\n\n**요구사항**:\n- @slack/bolt 4.6.0 사용\n- @slack/web-api 7.14.0 사용\n- App/Bot 토큰 검증 (auth.test 호출)\n- 메시지 수신 핸들러\n- 메시지 발신 기능\n- allowed_users 화이트리스트 관리\n- 채널 어댑터 인터페이스 구현\n\n**의존성**: Task 4, Task 5\n\n**검증 기준**:\n- 토큰 검증 테스트\n- 메시지 수신 테스트\n- 메시지 발신 테스트\n- 화이트리스트 필터링 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "4",
+          "5"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:36:13.494Z"
+      },
+      {
+        "id": "10",
+        "title": "Bash 도구 실행 시스템 구현 (F006)",
+        "description": "터미널 명령어 실행, 출력 캡처 기능을 구현합니다.\n\n**요구사항**:\n- 명령어 실행 기능\n- 출력 캡처 (stdout, stderr)\n- 실행 타임아웃 설정\n- 작업 디렉토리 지정\n- 환경변수 전달\n- exit code 반환\n\n**의존성**: Task 5\n\n**검증 기준**:\n- 명령어 실행 테스트\n- 출력 캡처 테스트\n- 타임아웃 동작 테스트\n- 에러 처리 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "5"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:36:14.344Z"
+      },
+      {
+        "id": "11",
+        "title": "도구 승인 시스템 구현 (F007)",
+        "description": "위험도 기반 실행 전 승인 요청 시스템을 구현합니다.\n\n**요구사항**:\n- 위험도 분류: Critical (exec, browser, file_write), High (file_read, web_fetch), Medium (web_search), Low (info)\n- ApprovalRequest 모델 구현 (requestId, tool, params, riskLevel, riskScore, timestamp, status, mode)\n- 승인 UI 터미널 인터랙티브 (@clack/prompts)\n- 타임아웃: 기본 60초, 고위험 120초\n- 실행 모드별 동작: CLI 포그라운드 모드(인터랙티브), Daemon 모드(화이트리스트 기반)\n\n**의존성**: Task 5, Task 10\n\n**검증 기준**:\n- 위험도 평가 테스트\n- 승인 UI 테스트\n- 타임아웃 동작 테스트\n- 모드별 동작 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "5",
+          "10"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:51:12.586Z"
+      },
+      {
+        "id": "12",
+        "title": "Browser 샌드박스 구현 (F013)",
+        "description": "isolated-vm 기반 코드 검증, Playwright 실행 (2계층 검증)을 구현합니다.\n\n**요구사항**:\n- 2계층 검증: Layer 1 (Node.js 정적 분석 + isolated-vm), Layer 2 (Playwright CDP)\n- 정적 분석 규칙: eval-usage, new-function, child-process, fs-access, network-fetch, env-access\n- isolated-vm 샌드박스: 30초 타임아웃, 256MB 메모리 제한\n- Playwright 브라우저 컨텍스트 실행\n- playwright-core 1.58.2 사용\n\n**의존성**: Task 5\n\n**검증 기준**:\n- 정적 분석 테스트\n- isolated-vm 샌드박스 테스트\n- Playwright 실행 테스트\n- 보안 우회 시도 테스트",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "5"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:36:14.583Z"
+      },
+      {
+        "id": "13",
+        "title": "Gateway HTTP/WebSocket 서버 구현 (F009)",
+        "description": "REST API 및 실시간 연결 서버를 구현합니다.\n\n**요구사항**:\n- Express 5.2.1 기반 HTTP 서버\n- ws 8.19.0 기반 WebSocket 서버\n- API 엔드포인트:\n  - POST /v1/chat/completions (AI 대화)\n  - GET /v1/models (사용 가능한 모델)\n  - GET /v1/health (헬스 체크)\n  - POST /v1/channels/send (메시지 전송)\n  - GET /v1/channels (채널 목록)\n- WebSocket 실시간 연결 관리 (심박수, 메시지 큐)\n- 네트워크 보안: 127.0.0.1 바인딩, CIDR ACL, JWT 세션\n\n**의존성**: Task 7, Task 8, Task 9, Task 11, Task 6\n\n**검증 기준**:\n- HTTP API 테스트\n- WebSocket 연결 테스트\n- 보안 설정 테스트\n- 동시 연결 처리 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "7",
+          "8",
+          "9",
+          "11",
+          "6"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:06:21.178Z"
+      },
+      {
+        "id": "14",
+        "title": "Onboard CLI 구현 (F010)",
+        "description": "초기 설정 마법사 CLI를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht onboard` 명령어\n- 마스터 비밀번호 입력 (최소 12자, 복잡도 요구)\n- 비밀번호 확인 입력\n- LLM 제공자 선택 (Anthropic/OpenAI)\n- API 키 입력 및 검증\n- Telegram/Slack 봇 토큰 입력 (선택)\n- 설정 파일 초기 생성 (version: \"2\")\n- 기존 평문 자격 증명 마이그레이션 프롬프트\n\n**의존성**: Task 2, Task 3, Task 4\n\n**검증 기준**:\n- onboard 플로우 E2E 테스트\n- 비밀번호 검증 테스트\n- 설정 파일 생성 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "2",
+          "3",
+          "4"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T05:51:12.839Z"
+      },
+      {
+        "id": "15",
+        "title": "Gateway CLI 구현 (F010)",
+        "description": "Gateway 서버 시작 CLI를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht gateway` 명령어\n- 서버 시작 및 초기화\n- 로그 출력\n- 설정 파일 로드\n- 채널 연결 초기화\n- Ctrl+C로 서버 종료 처리\n- Daemon 모드 지원\n\n**의존성**: Task 13, Task 4, Task 5\n\n**검증 기준**:\n- 서버 시작/종료 테스트\n- 설정 로드 테스트\n- Daemon 모드 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "13",
+          "4",
+          "5"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:19:40.087Z"
+      },
+      {
+        "id": "16",
+        "title": "Agent CLI 구현 (F010)",
+        "description": "AI 대화 CLI를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht agent` 명령어\n- 프롬프트 입력 수신 (readline 인터페이스)\n- LLM API 호출 (스트리밍 응답, 청크 단위 출력)\n- 도구 호출 감지 (bash, channel, cli_runner)\n- 위험도 평가 및 승인 UI 표시 (@clack/prompts)\n- 도구 실행 및 결과 전달\n- exit/quit 명령으로 종료\n\n**의존성**: Task 7, Task 11, Task 10\n\n**검증 기준**:\n- 대화 플로우 테스트\n- 도구 호출 테스트\n- 스트리밍 응답 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "7",
+          "11",
+          "10"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:06:21.601Z"
+      },
+      {
+        "id": "17",
+        "title": "Config CLI 구현 (F010)",
+        "description": "설정 관리 CLI를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht config get <key>` 명령어\n- `doppelgesicht config set <key> <value>` 명령어\n- `doppelgesicht config validate` 명령어\n- 설정 파일 조회, 수정, 검증\n- 환경변수 참조 해석\n- 변경사항 저장 및 적용\n\n**의존성**: Task 4\n\n**검증 기준**:\n- get/set/validate 명령어 테스트\n- 환경변수 치환 테스트",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "4"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:06:22.931Z"
+      },
+      {
+        "id": "18",
+        "title": "Auth CLI 구현 (F010)",
+        "description": "인증 프로파일 관리 CLI를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht auth add` 명령어\n- `doppelgesicht auth list` 명령어\n- `doppelgesicht auth remove <id>` 명령어\n- 제공자 선택 (anthropic/openai)\n- 인증 방식 선택 (oauth/api_key)\n- 자격 증명 입력\n- 프로파일 우선순위/fallback 설정\n\n**의존성**: Task 3\n\n**검증 기준**:\n- add/list/remove 명령어 테스트\n- 암호화 저장 테스트",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "3"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:06:23.278Z"
+      },
+      {
+        "id": "19",
+        "title": "Browser CLI 구현 (F010)",
+        "description": "브라우저 자동화 CLI를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht browser` 명령어\n- URL 입력 또는 JavaScript 코드 제공\n- 2계층 검증 시스템 실행\n- 실행 결과 확인\n- 정적 분석 실패 시 오류 메시지 표시\n\n**의존성**: Task 12\n\n**검증 기준**:\n- browser 명령어 테스트\n- 정적 분석 테스트\n- Playwright 실행 테스트",
+        "status": "done",
+        "priority": "low",
+        "dependencies": [
+          "12"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:19:40.562Z"
+      },
+      {
+        "id": "20",
+        "title": "Message CLI 구현 (F014)",
+        "description": "메시지 전송 테스트 CLI를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht message send --channel <channelId> --text \"message\"` 명령어\n- 채널 목록 조회\n- 메시지 전송 실행\n- 전송 결과 확인\n- 채널 미연결 시 연결 설정 안내\n\n**의존성**: Task 8, Task 9\n\n**검증 기준**:\n- send 명령어 테스트\n- 채널 목록 조회 테스트\n- 메시지 전송 결과 테스트",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "8",
+          "9"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:19:41.385Z"
+      },
+      {
+        "id": "21",
+        "title": "메인 CLI 엔트리포인트 구현",
+        "description": "Commander.js 기반 메인 CLI 엔트리포인트를 구현합니다.\n\n**요구사항**:\n- `doppelgesicht` 명령어 구조\n- 하위 명령어 등록 (onboard, gateway, agent, config, auth, message, browser)\n- 글로벌 옵션 (--version, --help, --verbose)\n- 에러 핸들링\n- CLI 도움말 생성\n\n**의존성**: Task 14, Task 15, Task 16, Task 17, Task 18, Task 19, Task 20\n\n**검증 기준**:\n- 모든 명령어 등록 테스트\n- 도움말 출력 테스트\n- 버전 정보 테스트",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:19:41.849Z"
+      },
+      {
+        "id": "22",
+        "title": "단위 테스트 작성",
+        "description": "핵심 유틸리티 함수, 암호화/복호화, 스키마 검증에 대한 단위 테스트를 작성합니다.\n\n**요구사항**:\n- Vitest 테스트 프레임워크 설정\n- 암호화/복호화 테스트\n- 스키마 검증 테스트\n- 유틸리티 함수 테스트\n- 커버리지 70%+ 목표\n\n**의존성**: Task 1, Task 2, Task 4\n\n**검증 기준**:\n- 모든 단위 테스트 통과\n- 커버리지 리포트 생성",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "1",
+          "2",
+          "4"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:45:09.454Z"
+      },
+      {
+        "id": "23",
+        "title": "통합 테스트 작성",
+        "description": "Gateway API, 채널 어댑터, LLM 클라이언트에 대한 통합 테스트를 작성합니다.\n\n**요구사항**:\n- Gateway API 통합 테스트\n- 채널 어댑터 통합 테스트 (Telegram, Slack)\n- LLM 클라이언트 통합 테스트\n- 메모리 시스템 통합 테스트\n\n**의존성**: Task 13, Task 8, Task 9, Task 7, Task 6\n\n**검증 기준**:\n- 모든 통합 테스트 통과\n- Mock 서버/클이언트 사용",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "13",
+          "8",
+          "9",
+          "7",
+          "6"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:45:11.197Z"
+      },
+      {
+        "id": "24",
+        "title": "E2E 테스트 작성",
+        "description": "주요 사용자 여정에 대한 E2E 테스트를 작성합니다.\n\n**요구사항**:\n- 정상 플로우: onboard → gateway 시작 → Telegram 메시지 → AI 응답\n- fallback 시나리오: Primary LLM 실패 → Secondary LLM 전환 → 응답 완료\n- 승인 플로우: 위험 도구 호출 → 승인 UI 표시 → 사용자 승인 → 실행 → 결과 반환\n- 오류 복구: 채널 연결 끊김 → 자동 재연결 → 메시지 처리 재개\n\n**의존성**: Task 21, Task 22, Task 23\n\n**검증 기준**:\n- 모든 E2E 테스트 통과\n- 테스트 환경 자동화",
+        "status": "done",
+        "priority": "low",
+        "dependencies": [
+          "21",
+          "22",
+          "23"
+        ],
+        "subtasks": [],
+        "updatedAt": "2026-02-19T06:45:24.347Z"
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-02-19T06:45:24.357Z",
+      "taskCount": 24,
+      "completedCount": 24,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}

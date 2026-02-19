@@ -1,6 +1,6 @@
 /**
  * Supabase 데이터베이스 관리자
- * @description @supabase/supabase-js 기반 PostgreSQL 연동 및 로컬 캐시 폴리
+ * @description @supabase/supabase-js 기반 PostgreSQL 연동
  */
 
 import { randomUUID } from 'crypto';
@@ -20,16 +20,12 @@ import type {
   Message,
   SessionQueryOptions,
   MessageQueryOptions,
-  DatabaseConfig,
 } from '../types.js';
 import { MessageRole, ContextStrategy } from '../types.js';
 import {
   initializeSupabaseClient,
   testSupabaseConnection,
-  reconnectSupabase,
-  setLocalCacheMode,
 } from './client.js';
-import { DatabaseManager as SQLiteDatabaseManager } from '../database.js';
 
 /**
  * Supabase 데이터베이스 관리자
@@ -37,9 +33,6 @@ import { DatabaseManager as SQLiteDatabaseManager } from '../database.js';
 export class SupabaseDatabaseManager {
   private supabaseClient: SupabaseClient | null = null;
   private config: SupabaseConfig;
-  private localCache: SQLiteDatabaseManager | null = null;
-  private useLocalCache: boolean = false;
-  private maxRetries: number = 5;
 
   constructor(config: SupabaseConfig) {
     this.config = config;
@@ -48,7 +41,7 @@ export class SupabaseDatabaseManager {
   /**
    * 데이터베이스 초기화
    */
-  async initialize(localCacheConfig?: DatabaseConfig): Promise<void> {
+  async initialize(): Promise<void> {
     // Supabase 클라이언트 초기화
     this.supabaseClient = initializeSupabaseClient(this.config);
 
@@ -56,96 +49,18 @@ export class SupabaseDatabaseManager {
     const connected = await testSupabaseConnection();
 
     if (!connected) {
-      // 연결 실패 시 로컬 캐시 모드로 전환
-      if (localCacheConfig) {
-        this.useLocalCache = true;
-        setLocalCacheMode(true);
-        this.localCache = new SQLiteDatabaseManager(localCacheConfig);
-        await this.localCache.initialize();
-        console.warn('Supabase connection failed. Using local cache mode.');
-      } else {
-        throw new Error('Supabase connection failed and no local cache configured');
-      }
+      throw new Error('Supabase connection failed. Please check your Supabase URL and API key.');
     }
   }
 
   /**
-   * 로컬 캐시 모드 여부 확인
+   * Supabase 클라이언트 조회
    */
-  isLocalCacheMode(): boolean {
-    return this.useLocalCache;
-  }
-
-  /**
-   * 연결 재시도
-   */
-  async retryConnection(): Promise<boolean> {
-    if (this.useLocalCache) {
-      const reconnected = await reconnectSupabase(this.config, this.maxRetries);
-      if (reconnected) {
-        this.useLocalCache = false;
-        setLocalCacheMode(false);
-        // 로컬 캐시 데이터를 Supabase로 동기화
-        await this.syncLocalCacheToSupabase();
-        return true;
-      }
+  getClient(): SupabaseClient {
+    if (!this.supabaseClient) {
+      throw new Error('Supabase client not initialized');
     }
-    return false;
-  }
-
-  /**
-   * 로컬 캐시 데이터를 Supabase로 동기화
-   */
-  private async syncLocalCacheToSupabase(): Promise<void> {
-    if (!this.localCache || !this.supabaseClient) return;
-
-    try {
-      // 로컬 세션 조회
-      const sessions = await this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare('SELECT * FROM sessions');
-        return stmt.all() as SupabaseSessionRow[];
-      });
-
-      // 로컬 메시지 조회
-      const messages = await this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare('SELECT * FROM messages');
-        return stmt.all() as SupabaseMessageRow[];
-      });
-
-      // Supabase로 데이터 동기화
-      for (const session of sessions) {
-        await this.supabaseClient.from('sessions').upsert({
-          id: session.id,
-          channel_id: session.channel_id,
-          user_id: session.user_id,
-          title: session.title,
-          max_messages: session.max_messages,
-          max_tokens: session.max_tokens,
-          context_strategy: session.context_strategy,
-          preserve_system_messages: session.preserve_system_messages,
-          metadata: session.metadata,
-          created_at: session.created_at,
-          updated_at: session.updated_at,
-        });
-      }
-
-      for (const message of messages) {
-        await this.supabaseClient.from('messages').upsert({
-          id: message.id,
-          session_id: message.session_id,
-          role: message.role,
-          content: message.content,
-          tool_calls: message.tool_calls,
-          tool_results: message.tool_results,
-          metadata: message.metadata,
-          created_at: message.created_at,
-        });
-      }
-
-      console.log(`Synced ${sessions.length} sessions and ${messages.length} messages to Supabase`);
-    } catch (error) {
-      console.error('Failed to sync local cache to Supabase:', error);
-    }
+    return this.supabaseClient;
   }
 
   // ==================== 세션 CRUD ====================
@@ -171,36 +86,6 @@ export class SupabaseDatabaseManager {
       updated_at: now,
     };
 
-    if (this.useLocalCache && this.localCache) {
-      // 로컬 캐시 모드
-      return this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare(`
-          INSERT INTO sessions (
-            id, channel_id, user_id, title, max_messages, max_tokens,
-            context_strategy, preserve_system_messages, metadata, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        stmt.run(
-          sessionData.id,
-          sessionData.channel_id,
-          sessionData.user_id,
-          sessionData.title,
-          sessionData.max_messages,
-          sessionData.max_tokens,
-          sessionData.context_strategy,
-          sessionData.preserve_system_messages ? 1 : 0,
-          sessionData.metadata ? JSON.stringify(sessionData.metadata) : null,
-          sessionData.created_at,
-          sessionData.updated_at
-        );
-
-        const result = this.rowToSession(sessionData as unknown as SupabaseSessionRow);
-        return { data: result, error: null };
-      });
-    }
-
-    // Supabase 모드
     const { error } = await this.supabaseClient!.from('sessions').insert(sessionData);
 
     if (error) {
@@ -215,19 +100,6 @@ export class SupabaseDatabaseManager {
    * 세션 조회
    */
   async getSession(id: string): Promise<SupabaseQueryResult<Session>> {
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare('SELECT * FROM sessions WHERE id = ?');
-        const row = stmt.get(id) as SupabaseSessionRow | undefined;
-
-        if (!row) {
-          return { data: null, error: null };
-        }
-
-        return { data: this.rowToSession(row), error: null };
-      });
-    }
-
     const { data, error } = await this.supabaseClient!
       .from('sessions')
       .select('*')
@@ -245,39 +117,6 @@ export class SupabaseDatabaseManager {
    * 세션 목록 조회
    */
   async listSessions(options: SessionQueryOptions = {}): Promise<SupabaseQueryListResult<Session>> {
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const conditions: string[] = [];
-        const params: (string | number)[] = [];
-
-        if (options.channelId) {
-          conditions.push('channel_id = ?');
-          params.push(options.channelId);
-        }
-
-        if (options.userId) {
-          conditions.push('user_id = ?');
-          params.push(options.userId);
-        }
-
-        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-        const orderBy = options.orderBy === 'createdAt' ? 'created_at' : 'updated_at';
-        const orderDirection = options.orderDirection || 'desc';
-        const limit = options.limit || 100;
-        const offset = options.offset || 0;
-
-        const stmt = this.localCache!.prepare(`
-          SELECT * FROM sessions
-          ${whereClause}
-          ORDER BY ${orderBy} ${orderDirection}
-          LIMIT ? OFFSET ?
-        `);
-
-        const rows = stmt.all(...params, limit, offset) as SupabaseSessionRow[];
-        return { data: rows.map((row) => this.rowToSession(row)), error: null };
-      });
-    }
-
     let query = this.supabaseClient!.from('sessions').select('*');
 
     if (options.channelId) {
@@ -327,34 +166,6 @@ export class SupabaseDatabaseManager {
 
     updateData.updated_at = new Date().toISOString();
 
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const sets: string[] = [];
-        const params: unknown[] = [];
-
-        for (const [key, value] of Object.entries(updateData)) {
-          sets.push(`${key} = ?`);
-          params.push(value);
-        }
-
-        params.push(id);
-
-        const stmt = this.localCache!.prepare(`
-          UPDATE sessions
-          SET ${sets.join(', ')}
-          WHERE id = ?
-        `);
-
-        stmt.run(...params);
-
-        // 업데이트된 세션 조회
-        const selectStmt = this.localCache!.prepare('SELECT * FROM sessions WHERE id = ?');
-        const row = selectStmt.get(id) as SupabaseSessionRow;
-
-        return { data: this.rowToSession(row), error: null };
-      });
-    }
-
     const { error } = await this.supabaseClient!.from('sessions').update(updateData).eq('id', id);
 
     if (error) {
@@ -369,22 +180,6 @@ export class SupabaseDatabaseManager {
    * 세션 삭제
    */
   async deleteSession(id: string): Promise<SupabaseQueryResult<void>> {
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        // 메시지 먼저 삭제
-        const deleteMessagesStmt = this.localCache!.prepare(
-          'DELETE FROM messages WHERE session_id = ?'
-        );
-        deleteMessagesStmt.run(id);
-
-        // 세션 삭제
-        const deleteSessionStmt = this.localCache!.prepare('DELETE FROM sessions WHERE id = ?');
-        deleteSessionStmt.run(id);
-
-        return { data: undefined, error: null };
-      });
-    }
-
     const { error } = await this.supabaseClient!.from('sessions').delete().eq('id', id);
 
     if (error) {
@@ -414,36 +209,6 @@ export class SupabaseDatabaseManager {
       created_at: now,
     };
 
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare(`
-          INSERT INTO messages (
-            id, session_id, role, content, tool_calls, tool_results, metadata, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        stmt.run(
-          messageData.id,
-          messageData.session_id,
-          messageData.role,
-          messageData.content,
-          messageData.tool_calls ? JSON.stringify(messageData.tool_calls) : null,
-          messageData.tool_results ? JSON.stringify(messageData.tool_results) : null,
-          messageData.metadata ? JSON.stringify(messageData.metadata) : null,
-          messageData.created_at
-        );
-
-        // 세션 업데이트 시간 갱신
-        const updateStmt = this.localCache!.prepare(
-          'UPDATE sessions SET updated_at = ? WHERE id = ?'
-        );
-        updateStmt.run(now, data.session_id);
-
-        const result = this.rowToMessage(messageData as unknown as SupabaseMessageRow);
-        return { data: result, error: null };
-      });
-    }
-
     const { error } = await this.supabaseClient!.from('messages').insert(messageData);
 
     if (error) {
@@ -458,19 +223,6 @@ export class SupabaseDatabaseManager {
    * 메시지 조회
    */
   async getMessage(id: string): Promise<SupabaseQueryResult<Message>> {
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare('SELECT * FROM messages WHERE id = ?');
-        const row = stmt.get(id) as SupabaseMessageRow | undefined;
-
-        if (!row) {
-          return { data: null, error: null };
-        }
-
-        return { data: this.rowToMessage(row), error: null };
-      });
-    }
-
     const { data, error } = await this.supabaseClient!
       .from('messages')
       .select('*')
@@ -490,37 +242,6 @@ export class SupabaseDatabaseManager {
   async listMessages(
     options: MessageQueryOptions = {}
   ): Promise<SupabaseQueryListResult<Message>> {
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const conditions: string[] = [];
-        const params: (string | number)[] = [];
-
-        if (options.sessionId) {
-          conditions.push('session_id = ?');
-          params.push(options.sessionId);
-        }
-
-        if (options.role) {
-          conditions.push('role = ?');
-          params.push(options.role);
-        }
-
-        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-        const limit = options.limit || 100;
-        const offset = options.offset || 0;
-
-        const stmt = this.localCache!.prepare(`
-          SELECT * FROM messages
-          ${whereClause}
-          ORDER BY created_at ASC
-          LIMIT ? OFFSET ?
-        `);
-
-        const rows = stmt.all(...params, limit, offset) as SupabaseMessageRow[];
-        return { data: rows.map((row) => this.rowToMessage(row)), error: null };
-      });
-    }
-
     let query = this.supabaseClient!.from('messages').select('*');
 
     if (options.sessionId) {
@@ -561,14 +282,6 @@ export class SupabaseDatabaseManager {
    * 메시지 삭제
    */
   async deleteMessage(id: string): Promise<SupabaseQueryResult<void>> {
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare('DELETE FROM messages WHERE id = ?');
-        stmt.run(id);
-        return { data: undefined, error: null };
-      });
-    }
-
     const { error } = await this.supabaseClient!.from('messages').delete().eq('id', id);
 
     if (error) {
@@ -582,14 +295,6 @@ export class SupabaseDatabaseManager {
    * 세션의 모든 메시지 삭제
    */
   async deleteMessagesBySessionId(sessionId: string): Promise<SupabaseQueryResult<void>> {
-    if (this.useLocalCache && this.localCache) {
-      return this.localCache.runInQueue(() => {
-        const stmt = this.localCache!.prepare('DELETE FROM messages WHERE session_id = ?');
-        stmt.run(sessionId);
-        return { data: undefined, error: null };
-      });
-    }
-
     const { error } = await this.supabaseClient!
       .from('messages')
       .delete()
@@ -646,9 +351,6 @@ export class SupabaseDatabaseManager {
    * 데이터베이스 연결 종료
    */
   async close(): Promise<void> {
-    if (this.localCache) {
-      this.localCache.close();
-    }
     this.supabaseClient = null;
   }
 }
@@ -662,11 +364,10 @@ let globalSupabaseDatabase: SupabaseDatabaseManager | null = null;
  * 글로벌 Supabase 데이터베이스 초기화
  */
 export async function initializeSupabaseDatabase(
-  config: SupabaseConfig,
-  localCacheConfig?: DatabaseConfig
+  config: SupabaseConfig
 ): Promise<SupabaseDatabaseManager> {
   globalSupabaseDatabase = new SupabaseDatabaseManager(config);
-  await globalSupabaseDatabase.initialize(localCacheConfig);
+  await globalSupabaseDatabase.initialize();
   return globalSupabaseDatabase;
 }
 

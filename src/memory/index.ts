@@ -1,18 +1,19 @@
 /**
  * 메모리 시스템 모듈
- * @description SQLite 기반 대화 기록 저장 및 컨텍스트 관리
+ * @description Supabase PostgreSQL 기반 대화 기록 저장 및 컨텍스트 관리
  *
  * @example
  * ```typescript
- * import { initializeDatabase, initializeMemoryManager } from './memory/index.js';
+ * import { initializeSupabaseDatabase, initializeSupabaseMemoryManager } from './memory/index.js';
  *
- * // 데이터베이스 초기화
- * const db = await initializeDatabase({
- *   dbPath: '~/.doppelgesicht/memory.db',
+ * // Supabase 데이터베이스 초기화
+ * const db = await initializeSupabaseDatabase({
+ *   url: process.env.SUPABASE_URL!,
+ *   anonKey: process.env.SUPABASE_ANON_KEY!,
  * });
  *
  * // 메모리 관리자 초기화
- * const memory = initializeMemoryManager(db);
+ * const memory = initializeSupabaseMemoryManager(db);
  *
  * // 세션 생성
  * const session = await memory.createSession({
@@ -47,36 +48,30 @@ export type {
   SessionQueryOptions,
   MessageQueryOptions,
   IMemoryManager,
-  IDatabaseConnection,
-  DatabaseConfig,
-  QueueTask,
 } from './types.js';
 
 // 열거형 재낳ㅇ
 export { MessageRole, ContextStrategy } from './types.js';
 
-// 데이터베이스
-export {
-  DatabaseManager,
-  initializeDatabase,
-  getDatabase,
-  closeDatabase,
-} from './database.js';
-
-// 동시성 제어
-export { AccessQueue, ReadWriteLock } from './queue.js';
-
-// 모델
-export { SessionModel } from './models/session.js';
-export { MessageModel } from './models/message.js';
-
-// 메모리 관리자
-export {
-  MemoryManager,
-  initializeMemoryManager,
-  getMemoryManager,
-  closeMemoryManager,
-} from './manager.js';
-
 // Supabase 모듈 (F008)
 export * as supabase from './supabase/index.js';
+
+// Supabase 편의 export
+export {
+  SupabaseDatabaseManager,
+  initializeSupabaseDatabase,
+  getSupabaseDatabase,
+  closeSupabaseDatabase,
+} from './supabase/database.js';
+
+export {
+  SupabaseMemoryManager,
+  initializeSupabaseMemoryManager,
+  getSupabaseMemoryManager,
+  closeSupabaseMemoryManager,
+} from './supabase/manager.js';
+
+export type {
+  SupabaseConfig,
+  SupabaseMemoryConfig,
+} from './supabase/types.js';

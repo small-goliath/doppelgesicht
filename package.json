@@ -42,7 +42,6 @@
     "@slack/web-api": "^7.14.0",
     "@supabase/supabase-js": "^2.49.0",
     "argon2": "^0.44.0",
-    "better-sqlite3": "^12.1.0",
     "commander": "^13.1.0",
     "discord.js": "^14.18.0",
     "express": "^5.2.1",
@@ -56,7 +55,6 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.2",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.15.0",

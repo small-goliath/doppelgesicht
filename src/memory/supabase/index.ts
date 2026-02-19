@@ -1,6 +1,6 @@
 /**
  * Supabase 메모리 모듈
- * @description @supabase/supabase-js 기반 PostgreSQL 연동 및 로컬 캐시 폴리
+ * @description @supabase/supabase-js 기반 PostgreSQL 연동
  */
 
 export type {
@@ -24,8 +24,6 @@ export {
   isSupabaseInitialized,
   testSupabaseConnection,
   getSupabaseConnectionState,
-  reconnectSupabase,
-  setLocalCacheMode,
   closeSupabaseClient,
   subscribeToTable,
 } from './client.js';

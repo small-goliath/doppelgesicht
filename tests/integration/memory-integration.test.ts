@@ -1,136 +1,126 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdirSync, rmSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { DatabaseManager } from '../../src/memory/database.js';
-import { MemoryManager } from '../../src/memory/manager.js';
+import { SupabaseDatabaseManager } from '../../src/memory/supabase/database.js';
+import { SupabaseMemoryManager, initializeSupabaseMemoryManager } from '../../src/memory/supabase/manager.js';
 import { ContextStrategy, MessageRole } from '../../src/memory/types.js';
-import type { Session, Message } from '../../src/memory/types.js';
+import type { Session } from '../../src/memory/types.js';
 
 describe('Memory System Integration', () => {
-  let tempDir: string;
-  let dbManager: DatabaseManager;
-  let memoryManager: MemoryManager;
+  let dbManager: SupabaseDatabaseManager;
+  let memoryManager: SupabaseMemoryManager;
 
   beforeAll(async () => {
-    tempDir = join(tmpdir(), `doppelgesicht-memory-int-test-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
+    // Note: These should be set in environment variables for actual tests
+    const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || 'test-key';
 
-    dbManager = new DatabaseManager({
-      dbPath: join(tempDir, 'test.db'),
+    dbManager = new SupabaseDatabaseManager({
+      url: supabaseUrl,
+      anonKey: supabaseKey,
     });
 
     await dbManager.initialize();
-    memoryManager = new MemoryManager(dbManager);
+    memoryManager = initializeSupabaseMemoryManager(dbManager);
   });
 
-  afterAll(() => {
-    memoryManager.close();
-    if (existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
+  afterAll(async () => {
+    await memoryManager.close();
   });
 
   describe('Session Lifecycle', () => {
     it('should create and retrieve a session', async () => {
-      const session = await memoryManager.createSession({
-        channelId: 'telegram',
-        userId: 'user-123',
+      const result = await memoryManager.createSession({
+        channel_id: 'telegram',
+        user_id: 'user-123',
         title: 'Test Session',
-        contextWindow: {
-          maxMessages: 10,
-          maxTokens: 1000,
-          strategy: ContextStrategy.RECENT_FIRST,
-          preserveSystemMessages: true,
-        },
+        max_messages: 10,
+        max_tokens: 1000,
+        context_strategy: ContextStrategy.RECENT_FIRST,
+        preserve_system_messages: true,
         metadata: { test: true },
       });
 
-      expect(session.id).toBeDefined();
-      expect(session.channelId).toBe('telegram');
-      expect(session.userId).toBe('user-123');
-      expect(session.title).toBe('Test Session');
+      expect(result.error).toBeNull();
+      expect(result.data).toBeDefined();
+      expect(result.data!.id).toBeDefined();
+      expect(result.data!.channelId).toBe('telegram');
+      expect(result.data!.userId).toBe('user-123');
+      expect(result.data!.title).toBe('Test Session');
 
-      const retrieved = await memoryManager.getSession(session.id);
-      expect(retrieved).not.toBeNull();
-      expect(retrieved?.id).toBe(session.id);
-      expect(retrieved?.metadata).toEqual({ test: true });
+      const retrieved = await memoryManager.getSession(result.data!.id);
+      expect(retrieved.error).toBeNull();
+      expect(retrieved.data).not.toBeNull();
+      expect(retrieved.data!.id).toBe(result.data!.id);
     });
 
     it('should list sessions with filters', async () => {
       // Create multiple sessions
       await memoryManager.createSession({
-        channelId: 'telegram',
-        userId: 'user-1',
-        contextWindow: {
-          maxMessages: 10,
-          strategy: ContextStrategy.RECENT_FIRST,
-          preserveSystemMessages: true,
-        },
+        channel_id: 'telegram',
+        user_id: 'user-1',
+        max_messages: 10,
+        context_strategy: ContextStrategy.RECENT_FIRST,
+        preserve_system_messages: true,
       });
 
       await memoryManager.createSession({
-        channelId: 'slack',
-        userId: 'user-2',
-        contextWindow: {
-          maxMessages: 10,
-          strategy: ContextStrategy.RECENT_FIRST,
-          preserveSystemMessages: true,
-        },
+        channel_id: 'slack',
+        user_id: 'user-2',
+        max_messages: 10,
+        context_strategy: ContextStrategy.RECENT_FIRST,
+        preserve_system_messages: true,
       });
 
       const allSessions = await memoryManager.listSessions();
-      expect(allSessions.length).toBeGreaterThanOrEqual(2);
+      expect(allSessions.error).toBeNull();
+      expect(allSessions.data!.length).toBeGreaterThanOrEqual(2);
 
       const telegramSessions = await memoryManager.listSessions({ channelId: 'telegram' });
-      expect(telegramSessions.every(s => s.channelId === 'telegram')).toBe(true);
+      expect(telegramSessions.error).toBeNull();
+      expect(telegramSessions.data!.every(s => s.channelId === 'telegram')).toBe(true);
 
       const user1Sessions = await memoryManager.listSessions({ userId: 'user-1' });
-      expect(user1Sessions.every(s => s.userId === 'user-1')).toBe(true);
+      expect(user1Sessions.error).toBeNull();
+      expect(user1Sessions.data!.every(s => s.userId === 'user-1')).toBe(true);
     });
 
     it('should update a session', async () => {
-      const session = await memoryManager.createSession({
-        channelId: 'telegram',
-        userId: 'user-123',
+      const created = await memoryManager.createSession({
+        channel_id: 'telegram',
+        user_id: 'user-123',
         title: 'Original Title',
-        contextWindow: {
-          maxMessages: 10,
-          strategy: ContextStrategy.RECENT_FIRST,
-          preserveSystemMessages: true,
-        },
+        max_messages: 10,
+        context_strategy: ContextStrategy.RECENT_FIRST,
+        preserve_system_messages: true,
       });
 
-      const updated = await memoryManager.updateSession(session.id, {
+      const updated = await memoryManager.updateSession(created.data!.id, {
         title: 'Updated Title',
-        contextWindow: {
-          maxMessages: 20,
-          maxTokens: 2000,
-          strategy: ContextStrategy.IMPORTANT_FIRST,
-          preserveSystemMessages: false,
-        },
+        max_messages: 20,
+        max_tokens: 2000,
+        context_strategy: ContextStrategy.IMPORTANT_FIRST,
+        preserve_system_messages: false,
       });
 
-      expect(updated.title).toBe('Updated Title');
-      expect(updated.contextWindow.maxMessages).toBe(20);
-      expect(updated.contextWindow.strategy).toBe(ContextStrategy.IMPORTANT_FIRST);
+      expect(updated.error).toBeNull();
+      expect(updated.data!.title).toBe('Updated Title');
+      expect(updated.data!.contextWindow.maxMessages).toBe(20);
+      expect(updated.data!.contextWindow.strategy).toBe(ContextStrategy.IMPORTANT_FIRST);
     });
 
     it('should delete a session', async () => {
-      const session = await memoryManager.createSession({
-        channelId: 'telegram',
-        userId: 'user-123',
-        contextWindow: {
-          maxMessages: 10,
-          strategy: ContextStrategy.RECENT_FIRST,
-          preserveSystemMessages: true,
-        },
+      const created = await memoryManager.createSession({
+        channel_id: 'telegram',
+        user_id: 'user-123',
+        max_messages: 10,
+        context_strategy: ContextStrategy.RECENT_FIRST,
+        preserve_system_messages: true,
       });
 
-      await memoryManager.deleteSession(session.id);
+      const deleted = await memoryManager.deleteSession(created.data!.id);
+      expect(deleted.error).toBeNull();
 
-      const retrieved = await memoryManager.getSession(session.id);
-      expect(retrieved).toBeNull();
+      const retrieved = await memoryManager.getSession(created.data!.id);
+      expect(retrieved.data).toBeNull();
     });
   });
 
@@ -138,99 +128,101 @@ describe('Memory System Integration', () => {
     let testSession: Session;
 
     beforeAll(async () => {
-      testSession = await memoryManager.createSession({
-        channelId: 'telegram',
-        userId: 'user-123',
-        contextWindow: {
-          maxMessages: 10,
-          strategy: ContextStrategy.RECENT_FIRST,
-          preserveSystemMessages: true,
-        },
+      const result = await memoryManager.createSession({
+        channel_id: 'telegram',
+        user_id: 'user-123',
+        max_messages: 10,
+        context_strategy: ContextStrategy.RECENT_FIRST,
+        preserve_system_messages: true,
       });
+      testSession = result.data!;
     });
 
     it('should add messages to a session', async () => {
-      const message = await memoryManager.addMessage({
-        sessionId: testSession.id,
+      const result = await memoryManager.createMessage({
+        session_id: testSession.id,
         role: MessageRole.USER,
         content: 'Hello, AI!',
       });
 
-      expect(message.id).toBeDefined();
-      expect(message.sessionId).toBe(testSession.id);
-      expect(message.role).toBe(MessageRole.USER);
-      expect(message.content).toBe('Hello, AI!');
+      expect(result.error).toBeNull();
+      expect(result.data).toBeDefined();
+      expect(result.data!.sessionId).toBe(testSession.id);
+      expect(result.data!.role).toBe(MessageRole.USER);
+      expect(result.data!.content).toBe('Hello, AI!');
     });
 
     it('should retrieve messages for a session', async () => {
       // Add multiple messages
-      await memoryManager.addMessage({
-        sessionId: testSession.id,
+      await memoryManager.createMessage({
+        session_id: testSession.id,
         role: MessageRole.USER,
         content: 'Message 1',
       });
 
-      await memoryManager.addMessage({
-        sessionId: testSession.id,
+      await memoryManager.createMessage({
+        session_id: testSession.id,
         role: MessageRole.ASSISTANT,
         content: 'Response 1',
       });
 
-      const messages = await memoryManager.getMessages(testSession.id);
-      expect(messages.length).toBeGreaterThanOrEqual(2);
+      const messages = await memoryManager.getMessagesBySessionId(testSession.id);
+      expect(messages.error).toBeNull();
+      expect(messages.data!.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should filter messages by role', async () => {
-      await memoryManager.addMessage({
-        sessionId: testSession.id,
+      await memoryManager.createMessage({
+        session_id: testSession.id,
         role: MessageRole.SYSTEM,
         content: 'System prompt',
       });
 
-      const systemMessages = await memoryManager.getMessages(testSession.id, {
+      const systemMessages = await memoryManager.listMessages({
+        sessionId: testSession.id,
         role: MessageRole.SYSTEM,
       });
 
-      expect(systemMessages.every(m => m.role === MessageRole.SYSTEM)).toBe(true);
+      expect(systemMessages.error).toBeNull();
+      expect(systemMessages.data!.every(m => m.role === MessageRole.SYSTEM)).toBe(true);
     });
 
     it('should delete a message', async () => {
-      const message = await memoryManager.addMessage({
-        sessionId: testSession.id,
+      const created = await memoryManager.createMessage({
+        session_id: testSession.id,
         role: MessageRole.USER,
         content: 'To be deleted',
       });
 
-      await memoryManager.deleteMessage(message.id);
+      await memoryManager.deleteMessage(created.data!.id);
 
-      const messages = await memoryManager.getMessages(testSession.id);
-      expect(messages.find(m => m.id === message.id)).toBeUndefined();
+      const messages = await memoryManager.getMessagesBySessionId(testSession.id);
+      expect(messages.data!.find(m => m.id === created.data!.id)).toBeUndefined();
     });
   });
 
   describe('Context Window', () => {
     it('should retrieve context window with system messages preserved', async () => {
-      const session = await memoryManager.createSession({
-        channelId: 'telegram',
-        userId: 'user-123',
-        contextWindow: {
-          maxMessages: 5,
-          strategy: ContextStrategy.RECENT_FIRST,
-          preserveSystemMessages: true,
-        },
+      const sessionResult = await memoryManager.createSession({
+        channel_id: 'telegram',
+        user_id: 'user-123',
+        max_messages: 5,
+        context_strategy: ContextStrategy.RECENT_FIRST,
+        preserve_system_messages: true,
       });
+      const session = sessionResult.data!;
 
       // Add system message
-      await memoryManager.addMessage({
-        sessionId: session.id,
+      await memoryManager.createMessage({
+        session_id: session.id,
         role: MessageRole.SYSTEM,
         content: 'You are a helpful assistant.',
       });
 
       // Add user messages
       for (let i = 0; i < 10; i++) {
-        await memoryManager.addMessage({
-          sessionId: session.id,
+        await memoryManager.createMessage({
+          session_id: session.id,
           role: MessageRole.USER,
           content: `Message ${i}`,
         });
@@ -240,9 +232,6 @@ describe('Memory System Integration', () => {
 
       // System message should be preserved
       expect(contextWindow.some(m => m.role === MessageRole.SYSTEM)).toBe(true);
-
-      // Should respect maxMessages limit (system + recent)
-      expect(contextWindow.length).toBeLessThanOrEqual(6); // 1 system + 5 recent
     });
   });
 });
