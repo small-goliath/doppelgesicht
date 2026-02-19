@@ -57,8 +57,6 @@ config.yml
 
 # Database files
 *.db
-*.sqlite
-*.sqlite3
 
 # Playwright
 playwright-report/
