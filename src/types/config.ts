@@ -33,6 +33,14 @@ export interface ChannelConfig {
     botToken?: string;
     allowedUsers?: string[];
   };
+  /** Discord 설정 (F005-1) */
+  discord?: {
+    botToken?: string;
+    allowedUsers?: string[];
+    allowedChannels?: string[];
+    allowedGuilds?: string[];
+    allowDMs?: boolean;
+  };
 }
 
 /**
@@ -76,15 +84,50 @@ export interface LoggingConfig {
 }
 
 /**
+ * Supabase 연결 설정
+ */
+export interface SupabaseConfig {
+  /** Supabase 프로젝트 URL */
+  url: string;
+  /** Supabase Anon/Public API Key */
+  anonKey: string;
+  /** 연결 옵션 */
+  options?: {
+    /** 인증 설정 */
+    auth?: {
+      persistSession?: boolean;
+      autoRefreshToken?: boolean;
+    };
+    /** 데이터베이스 설정 */
+    db?: {
+      schema?: string;
+    };
+    /** 실시간 설정 */
+    realtime?: {
+      enabled?: boolean;
+    };
+  };
+}
+
+/**
  * 메모리 설정
  */
 export interface MemoryConfig {
-  /** SQLite 데이터베이스 경로 */
+  /** SQLite 데이터베이스 경로 (로컬 캐시용) */
   dbPath: string;
   /** 최대 컨텍스트 길이 */
   maxContextLength: number;
   /** 세션 만료 시간 (밀리초) */
   sessionExpiry: number;
+  /** Supabase 설정 (F008) */
+  supabase?: SupabaseConfig;
+  /** 로컬 캐시 설정 (Supabase 연결 실패 시 폴리) */
+  localCache?: {
+    /** 로컬 캐시 사용 여부 */
+    enabled: boolean;
+    /** SQLite 캐시 DB 경로 */
+    dbPath: string;
+  };
 }
 
 /**

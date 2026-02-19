@@ -33,6 +33,13 @@ const ChannelConfigSchema = z.object({
     botToken: z.string().optional(),
     allowedUsers: z.array(z.string()).optional(),
   }).optional(),
+  discord: z.object({
+    botToken: z.string().optional(),
+    allowedUsers: z.array(z.string()).optional(),
+    allowedChannels: z.array(z.string()).optional(),
+    allowedGuilds: z.array(z.string()).optional(),
+    allowDMs: z.boolean().optional(),
+  }).optional(),
 });
 
 const GatewayConfigSchema = z.object({
@@ -60,10 +67,32 @@ const LoggingConfigSchema = z.object({
   json: z.boolean().default(true),
 });
 
+const SupabaseConfigSchema = z.object({
+  url: z.string().url(),
+  anonKey: z.string(),
+  options: z.object({
+    auth: z.object({
+      persistSession: z.boolean().default(true),
+      autoRefreshToken: z.boolean().default(true),
+    }).optional(),
+    db: z.object({
+      schema: z.string().default('public'),
+    }).optional(),
+    realtime: z.object({
+      enabled: z.boolean().default(true),
+    }).optional(),
+  }).optional(),
+});
+
 const MemoryConfigSchema = z.object({
   dbPath: z.string().default(join(DEFAULT_CONFIG_DIR, 'memory.db')),
   maxContextLength: z.number().int().min(1).default(10),
   sessionExpiry: z.number().int().default(7 * 24 * 60 * 60 * 1000), // 7일
+  supabase: SupabaseConfigSchema.optional(),
+  localCache: z.object({
+    enabled: z.boolean().default(true),
+    dbPath: z.string().default(join(DEFAULT_CONFIG_DIR, 'cache.db')),
+  }).optional(),
 });
 
 const SecurityConfigSchema = z.object({
