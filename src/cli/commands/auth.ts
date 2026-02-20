@@ -7,10 +7,39 @@ import type { Command } from 'commander';
 import * as p from '@clack/prompts';
 import { pc } from '../../utils/colors.js';
 import { AuthProfileManager } from '../../core/auth-profile.js';
-import { getMasterKey } from '../../security/master-key.js';
+import { verifyAndRecoverKey } from '../../security/master-key.js';
 import type { LLMProvider, AuthType, CreateAuthProfileInput } from '../../types/auth.js';
 import { MoonshotClient } from '../../llm/moonshot.js';
 import type { ILogger } from '../../logging/index.js';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+
+const MASTER_KEY_FILE = join(homedir(), '.doppelgesicht', 'master.key');
+
+/**
+ * 마스터 키 복구
+ */
+async function recoverMasterKey(): Promise<Buffer | null> {
+  if (!existsSync(MASTER_KEY_FILE)) {
+    return null;
+  }
+
+  const password = await p.password({
+    message: '마스터 비밀번호를 입력하세요:',
+  });
+
+  if (p.isCancel(password)) {
+    return null;
+  }
+
+  try {
+    const storedHash = readFileSync(MASTER_KEY_FILE, 'utf-8');
+    return await verifyAndRecoverKey(password, storedHash);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 프로파일 목록 표시
@@ -20,12 +49,18 @@ async function handleAuthList(): Promise<void> {
   spinner.start('프로파일을 로드하는 중...');
 
   try {
-    const masterKey = await getMasterKey();
+    const masterKey = await recoverMasterKey();
+    if (!masterKey) {
+      spinner.stop('마스터 키 복구 실패');
+      p.log.error('마스터 키를 복구할 수 없습니다. `doppelgesicht onboard`를 먼저 실행하세요.');
+      process.exit(1);
+    }
+
     const manager = new AuthProfileManager();
     manager.setMasterKey(masterKey);
 
-    // TODO: 실제 저장소에서 프로파일 로드
-    // 현재는 메모리에만 존재
+    // 파일에서 프로파일 로드
+    manager.loadFromFile();
 
     const profiles = manager.getAllProfiles();
     spinner.stop('프로파일 로드 완료');
@@ -79,7 +114,12 @@ async function handleAuthAdd(): Promise<void> {
   p.intro(pc.cyan('🔐 새 인증 프로파일 추가'));
 
   try {
-    const masterKey = await getMasterKey();
+    const masterKey = await recoverMasterKey();
+    if (!masterKey) {
+      p.log.error('마스터 키를 복구할 수 없습니다. `doppelgesicht onboard`를 먼저 실행하세요.');
+      process.exit(1);
+    }
+
     const manager = new AuthProfileManager();
     manager.setMasterKey(masterKey);
 
@@ -149,7 +189,7 @@ async function handleAuthAdd(): Promise<void> {
           ? 'https://api.anthropic.com'
           : provider === 'openai'
             ? 'https://api.openai.com'
-            : 'https://api.moonshot.cn/v1',
+            : 'https://api.moonshot.ai/v1',
       });
 
       if (p.isCancel(baseUrl)) {
@@ -252,7 +292,8 @@ async function handleAuthAdd(): Promise<void> {
       rateLimits,
     });
 
-    // TODO: 실제 저장소에 저장
+    // 파일에 저장
+    manager.saveToFile();
 
     spinner.stop('프로파일 생성 완료');
 
@@ -276,11 +317,18 @@ async function handleAuthRemove(id: string): Promise<void> {
   spinner.start('프로파일을 삭제하는 중...');
 
   try {
-    const masterKey = await getMasterKey();
+    const masterKey = await recoverMasterKey();
+    if (!masterKey) {
+      spinner.stop('마스터 키 복구 실패');
+      p.log.error('마스터 키를 복구할 수 없습니다. `doppelgesicht onboard`를 먼저 실행하세요.');
+      process.exit(1);
+    }
+
     const manager = new AuthProfileManager();
     manager.setMasterKey(masterKey);
 
-    // TODO: 실제 저장소에서 프로파일 로드 및 삭제
+    // 파일에서 프로파일 로드
+    manager.loadFromFile();
 
     const profile = manager.getProfile(id);
 
@@ -309,7 +357,8 @@ async function handleAuthRemove(id: string): Promise<void> {
     const deleted = manager.deleteProfile(id);
 
     if (deleted) {
-      // TODO: 실제 저장소에서도 삭제
+      // 파일에 저장 (삭제 반영)
+      manager.saveToFile();
       deleteSpinner.stop('삭제 완료');
       p.outro(pc.green('✓ 프로파일이 삭제되었습니다.'));
     } else {
@@ -332,11 +381,18 @@ async function handleAuthTest(_id?: string): Promise<void> {
   spinner.start('프로파일을 테스트하는 중...');
 
   try {
-    const masterKey = await getMasterKey();
+    const masterKey = await recoverMasterKey();
+    if (!masterKey) {
+      spinner.stop('마스터 키 복구 실패');
+      p.log.error('마스터 키를 복구할 수 없습니다. `doppelgesicht onboard`를 먼저 실행하세요.');
+      process.exit(1);
+    }
+
     const manager = new AuthProfileManager();
     manager.setMasterKey(masterKey);
 
-    // TODO: 실제 저장소에서 프로파일 로드 및 테스트
+    // 파일에서 프로파일 로드
+    manager.loadFromFile();
 
     spinner.stop('테스트 완료');
     p.log.success('프로파일이 정상적으로 작동합니다.');
