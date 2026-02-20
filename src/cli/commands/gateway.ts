@@ -11,8 +11,10 @@ import { GatewayServer } from '../../gateway/server.js';
 import { createLogger } from '../../logging/index.js';
 import { TelegramAdapter } from '../../channels/telegram/adapter.js';
 import { SlackAdapter } from '../../channels/slack/adapter.js';
+import { DiscordAdapter } from '../../channels/discord/adapter.js';
 import { AnthropicClient } from '../../llm/anthropic.js';
 import { OpenAIClient } from '../../llm/openai.js';
+import { MoonshotClient } from '../../llm/moonshot.js';
 import { AuthProfileManager } from '../../core/auth-profile.js';
 // recoverMasterKey는 onboard.ts에서 가져오지 않고 남부 구현
 import { join } from 'path';
@@ -180,6 +182,14 @@ class GatewayCLI {
       const profileManager = new AuthProfileManager();
       profileManager.setMasterKey(masterKey);
 
+      // 파일에서 프로파일 로드
+      const loaded = profileManager.loadFromFile();
+      if (loaded) {
+        this.logger.info(`Loaded ${profileManager.count} auth profiles from file`);
+      } else {
+        this.logger.warn('No auth profiles file found, starting with empty profiles');
+      }
+
       // LLM 클라이언트 초기화
       const llmClients = await this.initializeLLMClients(profileManager);
 
@@ -188,6 +198,11 @@ class GatewayCLI {
       if (this.options.channels) {
         const channelAdapters = await this.initializeChannels(config);
         channels.push(...channelAdapters);
+
+        // 채널 메시지 핸들러 등록
+        for (const channel of channels) {
+          this.setupChannelMessageHandler(channel, llmClients);
+        }
       }
 
       // Gateway 서버 생성
@@ -258,6 +273,11 @@ class GatewayCLI {
           if (credentials?.type === 'api_key') {
             clients.push(new OpenAIClient({ provider: 'openai', apiKey: credentials.apiKey }, this.logger));
           }
+        } else if (profile.provider === 'moonshot') {
+          const credentials = profileManager.getDecryptedCredentials(profile.id);
+          if (credentials?.type === 'api_key') {
+            clients.push(new MoonshotClient({ provider: 'moonshot', apiKey: credentials.apiKey }, this.logger));
+          }
         }
       }
     } catch (error) {
@@ -288,6 +308,13 @@ class GatewayCLI {
           } as import('../../channels/types.js').ChannelConfig,
           this.logger
         );
+        await telegramAdapter.initialize({
+          id: 'telegram',
+          name: 'Telegram',
+          enabled: true,
+          botToken: config.channels.telegram.botToken,
+          allowedUsers: config.channels.telegram.allowedUsers || [],
+        } as import('../../channels/types.js').ChannelConfig);
         await telegramAdapter.start();
         channels.push(telegramAdapter);
         this.logger.info('Telegram channel initialized');
@@ -310,11 +337,48 @@ class GatewayCLI {
           } as import('../../channels/types.js').ChannelConfig,
           this.logger
         );
+        await slackAdapter.initialize({
+          id: 'slack',
+          name: 'Slack',
+          enabled: true,
+          appToken: config.channels.slack.appToken,
+          botToken: config.channels.slack.botToken,
+          allowedUsers: config.channels.slack.allowedUsers || [],
+        } as import('../../channels/types.js').ChannelConfig);
         await slackAdapter.start();
         channels.push(slackAdapter);
         this.logger.info('Slack channel initialized');
       } catch (error) {
         this.logger.error('Failed to initialize Slack channel', error as Error);
+      }
+    }
+
+    // Discord 채널
+    if (config.channels.discord?.botToken) {
+      try {
+        const discordConfig = {
+          id: 'discord',
+          name: 'Discord',
+          enabled: true,
+          botToken: config.channels.discord.botToken,
+          allowedUsers: config.channels.discord.allowedUsers || [],
+          allowedChannels: config.channels.discord.allowedChannels || [],
+          allowedGuilds: config.channels.discord.allowedGuilds || [],
+          allowDMs: config.channels.discord.allowDMs ?? true,
+        };
+        // eslint-disable-next-line no-console
+        console.log('[GATEWAY] Discord config:', JSON.stringify(discordConfig, null, 2));
+
+        const discordAdapter = new DiscordAdapter(
+          discordConfig as import('../../channels/types.js').ChannelConfig,
+          this.logger
+        );
+        await discordAdapter.initialize(discordConfig as import('../../channels/types.js').ChannelConfig);
+        await discordAdapter.start();
+        channels.push(discordAdapter);
+        this.logger.info('Discord channel initialized');
+      } catch (error) {
+        this.logger.error('Failed to initialize Discord channel', error as Error);
       }
     }
 
@@ -366,5 +430,80 @@ class GatewayCLI {
         }
       });
     }
+  }
+
+  /**
+   * 채널 메시지 핸들러 설정
+   */
+  private setupChannelMessageHandler(
+    channel: import('../../channels/types.js').IChannelAdapter,
+    llmClients: import('../../llm/types.js').ILLMClient[]
+  ): void {
+    this.logger.info(`Setting up message handler for ${channel.name}`);
+    // eslint-disable-next-line no-console
+    console.log(`[GATEWAY] Setting up message handler for ${channel.name}`);
+
+    channel.onMessage(async (message) => {
+      // eslint-disable-next-line no-console
+      console.log(`[GATEWAY] Received message from ${channel.name}: "${message.text.substring(0, 50)}"`);
+      this.logger.info(`Received message from ${channel.name}`, {
+        userId: message.sender.id,
+        text: message.text.substring(0, 50),
+      });
+
+      // 채널 ID 추출 (Discord는 channelId, 기타는 channel 속성 사용)
+      const channelId = (message as { channelId?: string }).channelId || message.channel;
+      // eslint-disable-next-line no-console
+      console.log(`[GATEWAY] Using channel ID: ${channelId}`);
+
+      try {
+        // 사용자에게 타이핑 표시 (지원하는 경우)
+        if (channel.sendTypingIndicator) {
+          await channel.sendTypingIndicator(channelId);
+        }
+
+        // LLM 클라이언트 선택 (첫 번째 사용 가능한 클라이언트)
+        const client = llmClients[0];
+        if (!client) {
+          this.logger.error('No LLM client available');
+          await channel.send(channelId, {
+            text: '죄송합니다. 현재 AI 모델을 사용할 수 없습니다.',
+          });
+          return;
+        }
+
+        // AI 응답 생성
+        this.logger.debug(`Generating response with ${client.provider}`);
+        const response = await client.complete({
+          model: 'moonshot-v1-8k', // 기본 모델
+          messages: [{ role: 'user', content: message.text }],
+          max_tokens: 1024,
+        });
+
+        // 응답 전송
+        // eslint-disable-next-line no-console
+        console.log(`[GATEWAY] Sending response: "${response.message.content.substring(0, 50)}..."`);
+        await channel.send(channelId, {
+          text: response.message.content,
+        });
+        // eslint-disable-next-line no-console
+        console.log('[GATEWAY] Response sent successfully');
+
+        this.logger.info(`Response sent to ${channel.name}`);
+      } catch (error) {
+        this.logger.error('Error handling message', error as Error);
+        // eslint-disable-next-line no-console
+        console.error('[GATEWAY] Error handling message:', (error as Error).message);
+        try {
+          await channel.send(channelId, {
+            text: '죄송합니다. 메시지 처리 중 오류가 발생했습니다.',
+          });
+        } catch (sendError) {
+          this.logger.error('Failed to send error message', sendError as Error);
+          // eslint-disable-next-line no-console
+          console.error('[GATEWAY] Failed to send error message:', (sendError as Error).message);
+        }
+      }
+    });
   }
 }
