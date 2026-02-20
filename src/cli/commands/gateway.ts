@@ -16,6 +16,9 @@ import { AnthropicClient } from '../../llm/anthropic.js';
 import { OpenAIClient } from '../../llm/openai.js';
 import { MoonshotClient } from '../../llm/moonshot.js';
 import { AuthProfileManager } from '../../core/auth-profile.js';
+import type { ToolDefinition, ILLMClient } from '../../llm/types.js';
+import type { IChannelAdapter } from '../../channels/types.js';
+import type { ILogger } from '../../logging/index.js';
 // recoverMasterKey는 onboard.ts에서 가져오지 않고 남부 구현
 import { join } from 'path';
 import { homedir } from 'os';
@@ -433,11 +436,301 @@ class GatewayCLI {
   }
 
   /**
+   * 사용 가능한 도구 정의 목록
+   */
+  private getToolDefinitions(): ToolDefinition[] {
+    return [
+      {
+        type: 'function',
+        function: {
+          name: 'exec',
+          description: 'Execute a shell command and return the output. Useful for running curl, date, or other CLI tools to get real-time data.',
+          parameters: {
+            type: 'object',
+            properties: {
+              command: {
+                type: 'string',
+                description: 'The shell command to execute (e.g., "curl -s https://api.example.com/data" or "date")',
+              },
+              timeout: {
+                type: 'number',
+                description: 'Timeout in milliseconds (default: 30000)',
+              },
+            },
+            required: ['command'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'web_fetch',
+          description: 'Fetch content from a URL using HTTP GET. Returns the HTML or text content.',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: {
+                type: 'string',
+                description: 'The URL to fetch (e.g., "https://example.com")',
+              },
+              headers: {
+                type: 'object',
+                description: 'Optional HTTP headers to include',
+              },
+            },
+            required: ['url'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'file_read',
+          description: 'Read the contents of a file from the local filesystem.',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: {
+                type: 'string',
+                description: 'Absolute path to the file to read',
+              },
+              encoding: {
+                type: 'string',
+                description: 'File encoding (default: utf8)',
+                enum: ['utf8', 'base64', 'binary'],
+              },
+            },
+            required: ['path'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'file_write',
+          description: 'Write content to a file on the local filesystem.',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: {
+                type: 'string',
+                description: 'Absolute path to the file to write',
+              },
+              content: {
+                type: 'string',
+                description: 'Content to write to the file',
+              },
+              encoding: {
+                type: 'string',
+                description: 'File encoding (default: utf8)',
+                enum: ['utf8', 'base64'],
+              },
+            },
+            required: ['path', 'content'],
+          },
+        },
+      },
+    ];
+  }
+
+  /**
+   * 도구 실행
+   */
+  private async executeTool(
+    toolCall: { id: string; function: { name: string; arguments: string } },
+    _logger: ILogger
+  ): Promise<{ success: boolean; output?: string; error?: string }> {
+    const { name, arguments: argsStr } = toolCall.function;
+    let args: Record<string, unknown>;
+
+    try {
+      args = JSON.parse(argsStr);
+    } catch {
+      return { success: false, error: 'Invalid JSON in tool arguments' };
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(`[TOOL] Executing tool: ${name} with args:`, args);
+
+    try {
+      switch (name) {
+        case 'exec': {
+          const { exec } = await import('child_process');
+          const { promisify } = await import('util');
+          const execAsync = promisify(exec);
+
+          const command = args.command as string;
+          const timeout = (args.timeout as number) || 30000;
+
+          const { stdout, stderr } = await execAsync(command, { timeout });
+          const output = stdout || stderr || '';
+
+          // 출력 크기 제한 (1MB)
+          const MAX_OUTPUT_SIZE = 1024 * 1024;
+          const truncatedOutput = output.length > MAX_OUTPUT_SIZE
+            ? output.substring(0, MAX_OUTPUT_SIZE) + '\n... (output truncated)'
+            : output;
+
+          return { success: true, output: truncatedOutput };
+        }
+
+        case 'web_fetch': {
+          const url = args.url as string;
+          const response = await fetch(url, {
+            headers: (args.headers as Record<string, string>) || {},
+          });
+
+          if (!response.ok) {
+            return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+          }
+
+          const content = await response.text();
+          // 출력 크기 제한 (1MB)
+          const MAX_CONTENT_SIZE = 1024 * 1024;
+          const truncatedContent = content.length > MAX_CONTENT_SIZE
+            ? content.substring(0, MAX_CONTENT_SIZE) + '\n... (content truncated)'
+            : content;
+
+          return { success: true, output: truncatedContent };
+        }
+
+        case 'file_read': {
+          const { readFileSync } = await import('fs');
+          const filePath = args.path as string;
+          const encoding = (args.encoding as 'utf8' | 'base64') || 'utf8';
+
+          const content = readFileSync(filePath, encoding);
+          // 출력 크기 제한 (1MB)
+          const MAX_CONTENT_SIZE = 1024 * 1024;
+          const truncatedContent = typeof content === 'string' && content.length > MAX_CONTENT_SIZE
+            ? content.substring(0, MAX_CONTENT_SIZE) + '\n... (content truncated)'
+            : content;
+
+          return { success: true, output: truncatedContent };
+        }
+
+        case 'file_write': {
+          const { writeFileSync } = await import('fs');
+          const filePath = args.path as string;
+          const content = args.content as string;
+          const encoding = (args.encoding as 'utf8' | 'base64') || 'utf8';
+
+          writeFileSync(filePath, content, encoding);
+          return { success: true, output: `File written successfully: ${filePath}` };
+        }
+
+        default:
+          return { success: false, error: `Unknown tool: ${name}` };
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Tool Call Loop 구현
+   * 반복적으로 LLM을 호출하여 도구 실행을 처리
+   */
+  private async executeToolCallLoop(
+    client: ILLMClient,
+    userMessage: string,
+    logger: ILogger
+  ): Promise<string> {
+    const tools = this.getToolDefinitions();
+    const messages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string; tool_call_id?: string; name?: string }> = [
+      {
+        role: 'system',
+        content: `You are a helpful AI assistant with access to real-time data through tools. Current date: ${new Date().toISOString()}. Use tools when you need current information.`,
+      },
+      { role: 'user', content: userMessage },
+    ];
+
+    const MAX_ITERATIONS = 10;
+    const MAX_TOTAL_TIME = 5 * 60 * 1000; // 5분
+    const startTime = Date.now();
+
+    let iteration = 0;
+
+    while (iteration < MAX_ITERATIONS) {
+      // 총 실행 시간 체크
+      if (Date.now() - startTime > MAX_TOTAL_TIME) {
+        logger.warn('Tool call loop exceeded maximum execution time');
+        return '죄송합니다. 요청 처리 시간이 너무 오래 걸려 중단되었습니다.';
+      }
+
+      iteration++;
+      logger.debug(`Tool call loop iteration ${iteration}`);
+      // eslint-disable-next-line no-console
+      console.log(`[TOOL LOOP] Iteration ${iteration}/${MAX_ITERATIONS}`);
+
+      // LLM 호출
+      const response = await client.complete({
+        model: 'moonshot-v1-8k',
+        messages,
+        tools,
+        max_tokens: 2048,
+      });
+
+      const assistantMessage = response.message;
+
+      // 도구 호출이 없으면 최종 응답 반환
+      if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+        logger.debug('No tool calls, returning final response');
+        return assistantMessage.content;
+      }
+
+      // 어시스턴트 메시지 추가
+      messages.push({
+        role: 'assistant',
+        content: assistantMessage.content || '',
+      });
+
+      // 각 도구 호출 실행
+      for (const toolCall of assistantMessage.tool_calls) {
+        // eslint-disable-next-line no-console
+        console.log(`[TOOL LOOP] Executing tool: ${toolCall.function.name}`);
+
+        const toolResult = await this.executeTool(toolCall, logger);
+
+        // eslint-disable-next-line no-console
+        console.log(`[TOOL LOOP] Tool result: ${toolResult.success ? 'success' : 'error'}`);
+
+        // 도구 결과를 메시지에 추가
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult),
+        });
+
+        // 도구 실행 로깅
+        logger.info(`Tool executed: ${toolCall.function.name}`, {
+          success: toolResult.success,
+          outputLength: toolResult.output?.length || 0,
+          error: toolResult.error,
+        });
+      }
+    }
+
+    // 최대 반복 횟수 초과
+    logger.warn('Tool call loop exceeded maximum iterations');
+
+    // 마지막으로 한 번 더 호출하여 정리
+    const finalResponse = await client.complete({
+      model: 'moonshot-v1-8k',
+      messages,
+      max_tokens: 2048,
+    });
+
+    return finalResponse.message.content;
+  }
+
+  /**
    * 채널 메시지 핸들러 설정
    */
   private setupChannelMessageHandler(
-    channel: import('../../channels/types.js').IChannelAdapter,
-    llmClients: import('../../llm/types.js').ILLMClient[]
+    channel: IChannelAdapter,
+    llmClients: ILLMClient[]
   ): void {
     this.logger.info(`Setting up message handler for ${channel.name}`);
     // eslint-disable-next-line no-console
@@ -472,25 +765,18 @@ class GatewayCLI {
           return;
         }
 
-        // AI 응답 생성
+        // AI 응답 생성 (Tool Call Loop 사용)
         this.logger.debug(`Generating response with ${client.provider}`);
+        // eslint-disable-next-line no-console
+        console.log(`[GATEWAY] Starting tool call loop with ${client.provider}`);
 
-        // TODO: 도구(tools) 통합 필요
-        // - Bash 도구: 명령어 실행 (curl 등으로 실시간 데이터 조회)
-        // - Browser 도구: 웹 페이지 접근
-        // 도구 호출 루프 구현 필요
-
-        const response = await client.complete({
-          model: 'moonshot-v1-8k', // 기본 모델
-          messages: [{ role: 'user', content: message.text }],
-          max_tokens: 1024,
-        });
+        const responseText = await this.executeToolCallLoop(client, message.text, this.logger);
 
         // 응답 전송
         // eslint-disable-next-line no-console
-        console.log(`[GATEWAY] Sending response: "${response.message.content.substring(0, 50)}..."`);
+        console.log(`[GATEWAY] Sending response: "${responseText.substring(0, 50)}..."`);
         await channel.send(channelId, {
-          text: response.message.content,
+          text: responseText,
         });
         // eslint-disable-next-line no-console
         console.log('[GATEWAY] Response sent successfully');
