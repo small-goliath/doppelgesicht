@@ -475,20 +475,14 @@ class GatewayCLI {
         // AI 응답 생성
         this.logger.debug(`Generating response with ${client.provider}`);
 
-        // 현재 날짜/시간 정보를 포함한 시스템 메시지
-        const now = new Date();
-        const systemPrompt = `당신은 Doppelgesicht AI 어시스턴트입니다.
-현재 날짜: ${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일
-현재 시간: ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}
-
-중요: 실시간 정보(날씨, 뉴스 등)는 제공할 수 없습니다. 사용자가 이런 정보를 요청하면, 실시간 데이터에 접근할 수 없다고 안내하세요.`;
+        // TODO: 도구(tools) 통합 필요
+        // - Bash 도구: 명령어 실행 (curl 등으로 실시간 데이터 조회)
+        // - Browser 도구: 웹 페이지 접근
+        // 도구 호출 루프 구현 필요
 
         const response = await client.complete({
           model: 'moonshot-v1-8k', // 기본 모델
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: message.text }
-          ],
+          messages: [{ role: 'user', content: message.text }],
           max_tokens: 1024,
         });
 
