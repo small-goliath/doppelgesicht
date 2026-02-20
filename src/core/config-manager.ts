@@ -16,7 +16,7 @@ const DEFAULT_CONFIG_PATH = join(DEFAULT_CONFIG_DIR, 'config.yaml');
 
 // Zod 스키마 정의
 const LLMConfigSchema = z.object({
-  defaultProvider: z.enum(['anthropic', 'openai']).default('anthropic'),
+  defaultProvider: z.enum(['anthropic', 'openai', 'moonshot']).default('anthropic'),
   defaultModel: z.string().default('claude-3-opus-20240229'),
   maxTokens: z.number().int().min(1).max(8192).default(4096),
   temperature: z.number().min(0).max(2).default(0.7),
@@ -68,7 +68,7 @@ const LoggingConfigSchema = z.object({
 });
 
 const SupabaseConfigSchema = z.object({
-  url: z.string().url(),
+  url: z.string(),
   anonKey: z.string(),
   options: z.object({
     auth: z.object({

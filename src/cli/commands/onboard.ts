@@ -94,8 +94,11 @@ class OnboardWizard {
       // 3. 채널 설정 (선택)
       const channelConfig = await this.setupChannels();
 
-      // 4. 설정 파일 생성
-      const config = this.createConfig(llmConfig, channelConfig);
+      // 4. Supabase 설정
+      const supabaseConfig = await this.setupSupabase();
+
+      // 5. 설정 파일 생성
+      const config = this.createConfig(llmConfig, channelConfig, supabaseConfig);
       configManager.save(config);
 
       // 5. 마스터 키 저장
@@ -116,6 +119,10 @@ class OnboardWizard {
     } catch (error) {
       this.logger.error('Onboard failed', error as Error);
       p.outro(colors.red('설정 중 오류가 발생했습니다.'));
+      p.log.error(colors.red(`오류 내용: ${(error as Error).message}`));
+      if ((error as Error).stack) {
+        p.log.error(colors.dim(`스택 트레이스: ${(error as Error).stack}`));
+      }
       process.exit(1);
     }
   }
@@ -260,15 +267,15 @@ class OnboardWizard {
     const spinner = p.spinner();
     spinner.start('API 키를 검증하는 중...');
 
-    const isValid = await this.validateApiKey(provider, apiKey);
+    const validation = await this.validateApiKey(provider, apiKey);
 
-    if (isValid) {
+    if (validation.valid) {
       spinner.stop('API 키가 유효합니다.');
     } else {
-      spinner.stop('API 키 검증에 실패했습니다.');
+      spinner.stop(`API 키 검증에 실패했습니다.${validation.error ? ` (${validation.error})` : ''}`);
       const continueAnyway = await p.confirm({
-        message: '계속 진행하시겠습니까?',
-        initialValue: false,
+        message: '계속 진행하시겠습니까? (나중에 다시 설정할 수 있습니다)',
+        initialValue: true,
       });
 
       if (!continueAnyway || p.isCancel(continueAnyway)) {
@@ -277,7 +284,7 @@ class OnboardWizard {
     }
 
     // 모델 선택
-    const model = await this.selectModel(provider);
+    const model = await this.selectModel(provider, apiKey);
 
     return { provider, apiKey, model };
   }
@@ -285,51 +292,199 @@ class OnboardWizard {
   /**
    * API 키 검증
    */
-  private async validateApiKey(provider: LLMProvider, apiKey: string): Promise<boolean> {
+  private async validateApiKey(provider: LLMProvider, apiKey: string): Promise<{ valid: boolean; error?: string }> {
     try {
       if (provider === 'anthropic') {
         const { AnthropicClient } = await import('../../llm/anthropic.js');
         const client = new AnthropicClient({ provider: 'anthropic', apiKey }, this.logger);
-        return await client.healthCheck().then(h => h.healthy);
+        const health = await client.healthCheck();
+        return { valid: health.healthy, error: health.error };
       } else if (provider === 'openai') {
         const { OpenAIClient } = await import('../../llm/openai.js');
         const client = new OpenAIClient({ provider: 'openai', apiKey }, this.logger);
-        return await client.healthCheck().then(h => h.healthy);
+        const health = await client.healthCheck();
+        return { valid: health.healthy, error: health.error };
       } else if (provider === 'moonshot') {
         const { MoonshotClient } = await import('../../llm/moonshot.js');
-        const client = new MoonshotClient({ provider: 'moonshot', apiKey }, this.logger);
-        return await client.validateKey();
+        const client = new MoonshotClient({ provider: 'moonshot', apiKey, baseURL: 'https://api.moonshot.ai/v1' }, this.logger);
+        const health = await client.healthCheck();
+        return { valid: health.healthy, error: health.error };
       }
-      return false;
-    } catch {
-      return false;
+      return { valid: false, error: 'Unknown provider' };
+    } catch (error) {
+      return { valid: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * 정적 모델 목록 (fallback용)
+   */
+  private getStaticModels(provider: LLMProvider): { value: string; label: string; hint?: string }[] {
+    if (provider === 'anthropic') {
+      return [
+        { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', hint: '가장 강력한 모델' },
+        { value: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet', hint: '권장' },
+        { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', hint: '빠른 응답' },
+        { value: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet', hint: '최신 Sonnet' },
+        { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet v2', hint: '최신 개선 버전' },
+      ];
+    } else if (provider === 'moonshot') {
+      return [
+        { value: 'kimi-k2.5', label: 'Kimi K2.5', hint: '최신 강력한 모델' },
+        { value: 'moonshot-v1-8k', label: 'Moonshot v1 8K', hint: '기본' },
+        { value: 'moonshot-v1-32k', label: 'Moonshot v1 32K', hint: '긴 컨텍스트' },
+        { value: 'moonshot-v1-128k', label: 'Moonshot v1 128K', hint: '매우 긴 컨텍스트' },
+      ];
+    } else {
+      return [
+        { value: 'gpt-4o', label: 'GPT-4o', hint: '최신 멀티모달 모델' },
+        { value: 'gpt-4o-mini', label: 'GPT-4o Mini', hint: '빠르고 저렴한 모델' },
+        { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', hint: '강력한 모델' },
+        { value: 'gpt-4', label: 'GPT-4', hint: '안정적인 모델' },
+        { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', hint: '빠른 응답' },
+        { value: 'o1-preview', label: 'o1 Preview', hint: '추론 모델 (미리보기)' },
+        { value: 'o1-mini', label: 'o1 Mini', hint: '경량 추론 모델' },
+      ];
+    }
+  }
+
+  /**
+   * 모델 ID에서 사용자 친화적인 레이블 생성
+   */
+  private getModelLabel(modelId: string): string {
+    // Anthropic 모델
+    if (modelId.includes('claude')) {
+      if (modelId.includes('opus')) return 'Claude 3 Opus';
+      if (modelId.includes('sonnet-20241022')) return 'Claude 3.5 Sonnet v2';
+      if (modelId.includes('sonnet-20240620')) return 'Claude 3.5 Sonnet';
+      if (modelId.includes('sonnet')) return 'Claude 3 Sonnet';
+      if (modelId.includes('haiku')) return 'Claude 3 Haiku';
+      return `Claude ${modelId}`;
+    }
+
+    // OpenAI 모델
+    if (modelId.includes('gpt-4o-mini')) return 'GPT-4o Mini';
+    if (modelId.includes('gpt-4o')) return 'GPT-4o';
+    if (modelId.includes('gpt-4-turbo')) return 'GPT-4 Turbo';
+    if (modelId.includes('gpt-4')) return 'GPT-4';
+    if (modelId.includes('gpt-3.5-turbo')) return 'GPT-3.5 Turbo';
+    if (modelId.includes('o1-preview')) return 'o1 Preview';
+    if (modelId.includes('o1-mini')) return 'o1 Mini';
+    if (modelId.includes('o1')) return 'o1';
+
+    // Moonshot/Kimi 모델
+    if (modelId.includes('moonshot')) {
+      if (modelId.includes('128k')) return 'Moonshot v1 128K';
+      if (modelId.includes('32k')) return 'Moonshot v1 32K';
+      if (modelId.includes('8k')) return 'Moonshot v1 8K';
+      return `Moonshot ${modelId}`;
+    }
+    if (modelId.includes('kimi')) {
+      if (modelId.includes('k2.5')) return 'Kimi K2.5';
+      if (modelId.includes('k1.5')) return 'Kimi K1.5';
+      if (modelId.includes('k1')) return 'Kimi K1';
+      return `Kimi ${modelId}`;
+    }
+
+    return modelId;
+  }
+
+  /**
+   * 모델 ID에서 힌트 생성
+   */
+  private getModelHint(modelId: string): string | undefined {
+    // Anthropic 모델
+    if (modelId.includes('claude')) {
+      if (modelId.includes('opus')) return '가장 강력한 모델';
+      if (modelId.includes('sonnet-20241022')) return '최신 개선 버전';
+      if (modelId.includes('sonnet-20240620')) return '최신 Sonnet';
+      if (modelId.includes('sonnet')) return '권장';
+      if (modelId.includes('haiku')) return '빠른 응답';
+    }
+
+    // OpenAI 모델
+    if (modelId.includes('gpt-4o-mini')) return '빠르고 저렴한 모델';
+    if (modelId.includes('gpt-4o')) return '최신 멀티모달 모델';
+    if (modelId.includes('gpt-4-turbo')) return '강력한 모델';
+    if (modelId.includes('gpt-4')) return '안정적인 모델';
+    if (modelId.includes('gpt-3.5-turbo')) return '빠른 응답';
+    if (modelId.includes('o1-preview')) return '추론 모델 (미리보기)';
+    if (modelId.includes('o1-mini')) return '경량 추론 모델';
+
+    // Moonshot/Kimi 모델
+    if (modelId.includes('moonshot')) {
+      if (modelId.includes('128k')) return '매우 긴 컨텍스트';
+      if (modelId.includes('32k')) return '긴 컨텍스트';
+      if (modelId.includes('8k')) return '기본';
+    }
+    if (modelId.includes('kimi')) {
+      if (modelId.includes('k2.5')) return '최신 강력한 모델';
+      if (modelId.includes('k1.5')) return '개선된 모델';
+      if (modelId.includes('k1')) return '기본 모델';
+    }
+
+    return undefined;
+  }
+
+  /**
+   * API에서 동적으로 모델 목록 조회
+   */
+  private async fetchModelsFromAPI(
+    provider: LLMProvider,
+    apiKey: string
+  ): Promise<string[] | null> {
+    try {
+      if (provider === 'anthropic') {
+        const { AnthropicClient } = await import('../../llm/anthropic.js');
+        const client = new AnthropicClient({ provider: 'anthropic', apiKey }, this.logger);
+        return await client.listModels();
+      } else if (provider === 'openai') {
+        const { OpenAIClient } = await import('../../llm/openai.js');
+        const client = new OpenAIClient({ provider: 'openai', apiKey }, this.logger);
+        return await client.listModels();
+      } else if (provider === 'moonshot') {
+        const { MoonshotClient } = await import('../../llm/moonshot.js');
+        const client = new MoonshotClient(
+          { provider: 'moonshot', apiKey, baseURL: 'https://api.moonshot.ai/v1' },
+          this.logger
+        );
+        return await client.listModels();
+      }
+      return null;
+    } catch (error) {
+      this.logger.warn(`Failed to fetch models from ${provider} API`, {
+        error: (error as Error).message,
+      });
+      return null;
     }
   }
 
   /**
    * 모델 선택
    */
-  private async selectModel(provider: LLMProvider): Promise<string> {
+  private async selectModel(provider: LLMProvider, apiKey: string): Promise<string> {
+    // API에서 모델 목록 동적으로 조회
+    const spinner = p.spinner();
+    spinner.start('사용 가능한 모델 목록을 불러오는 중...');
+
+    const dynamicModels = await this.fetchModelsFromAPI(provider, apiKey);
+
     let models: { value: string; label: string; hint?: string }[];
 
-    if (provider === 'anthropic') {
-      models = [
-        { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', hint: '가장 강력한 모델' },
-        { value: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet', hint: '권장' },
-        { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', hint: '빠른 응답' },
-      ];
-    } else if (provider === 'moonshot') {
-      models = [
-        { value: 'moonshot-v1-8k', label: 'Moonshot v1 8K', hint: '기본' },
-        { value: 'moonshot-v1-32k', label: 'Moonshot v1 32K', hint: '긴 컨텍스트' },
-        { value: 'moonshot-v1-128k', label: 'Moonshot v1 128K', hint: '매우 긴 컨텍스트' },
-      ];
+    if (dynamicModels && dynamicModels.length > 0) {
+      // API에서 받은 모델 목록 사용
+      spinner.stop(`${dynamicModels.length}개의 모델을 불러왔습니다.`);
+
+      // 모델 ID를 UI 옵션으로 변환
+      models = dynamicModels.map((modelId) => ({
+        value: modelId,
+        label: this.getModelLabel(modelId),
+        hint: this.getModelHint(modelId),
+      }));
     } else {
-      models = [
-        { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', hint: '가장 강력한 모델' },
-        { value: 'gpt-4', label: 'GPT-4', hint: '권장' },
-        { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', hint: '빠른 응답' },
-      ];
+      // API 조회 실패 시 정적 목록 사용
+      spinner.stop('API에서 모델 목록을 불러오지 못했습니다. 기본 목록을 사용합니다.');
+      models = this.getStaticModels(provider);
     }
 
     const model = await p.select({
@@ -338,7 +493,13 @@ class OnboardWizard {
     });
 
     if (p.isCancel(model)) {
-      return provider === 'anthropic' ? 'claude-3-sonnet-20240229' : 'gpt-4';
+      // 취소 시 기본값 반환
+      const defaultModels: Record<'anthropic' | 'openai' | 'moonshot', string> = {
+        anthropic: 'claude-3-sonnet-20240229',
+        openai: 'gpt-4o',
+        moonshot: 'moonshot-v1-8k',
+      };
+      return defaultModels[provider as 'anthropic' | 'openai' | 'moonshot'];
     }
 
     return model;
@@ -445,6 +606,59 @@ class OnboardWizard {
   }
 
   /**
+   * Supabase 설정
+   */
+  private async setupSupabase(): Promise<{ url: string; anonKey: string }> {
+    p.log.step('🗄️ Supabase 설정');
+    p.log.info('Supabase는 대화 기록 저장에 사용됩니다.');
+
+    const setupSupabase = await p.confirm({
+      message: 'Supabase를 설정하시겠습니까? (나중에 .env 파일로도 설정 가능)',
+      initialValue: false,
+    });
+
+    if (!p.isCancel(setupSupabase) && setupSupabase) {
+      const url = await p.text({
+        message: 'Supabase 프로젝트 URL을 입력하세요:',
+        placeholder: 'https://your-project.supabase.co',
+        validate: (value) => {
+          if (!value || !value.startsWith('https://') || !value.includes('.supabase.co')) {
+            return '유효한 Supabase URL을 입력하세요 (https://xxx.supabase.co)';
+          }
+          return undefined;
+        },
+      });
+
+      if (!p.isCancel(url)) {
+        const anonKey = await p.password({
+          message: 'Supabase Anon Key를 입력하세요:',
+          validate: (value) => {
+            if (!value || value.length < 20) {
+              return '유효한 Anon Key를 입력하세요';
+            }
+            return undefined;
+          },
+        });
+
+        if (!p.isCancel(anonKey)) {
+          p.log.success('Supabase 설정이 완료되었습니다.');
+          return { url, anonKey };
+        }
+      }
+    }
+
+    // 설정하지 않거나 취소한 경우 환경변수 안내
+    p.log.info('Supabase 설정을 건섈뜁니다.');
+    p.log.info(colors.dim('나중에 SUPABASE_URL과 SUPABASE_ANON_KEY 환경변수를 설정하세요.'));
+
+    // 기본값 반환 (실제 사용 시 환경변수에서 읽음)
+    return {
+      url: process.env.SUPABASE_URL || 'https://your-project.supabase.co',
+      anonKey: process.env.SUPABASE_ANON_KEY || 'your-anon-key',
+    };
+  }
+
+  /**
    * 설정 파일 생성
    */
   private createConfig(
@@ -453,7 +667,8 @@ class OnboardWizard {
       telegram?: { botToken: string };
       slack?: { appToken: string; botToken: string };
       discord?: { botToken: string };
-    }
+    },
+    supabaseConfig: { url: string; anonKey: string }
   ): AppConfig {
     return {
       version: '2',
@@ -513,8 +728,8 @@ class OnboardWizard {
       },
       memory: {
         supabase: {
-          url: '',
-          anonKey: '',
+          url: supabaseConfig.url,
+          anonKey: supabaseConfig.anonKey,
         },
         maxContextLength: 10,
         sessionExpiry: 7 * 24 * 60 * 60 * 1000,
