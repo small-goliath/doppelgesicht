@@ -4,6 +4,9 @@
  */
 
 import { randomUUID } from 'crypto';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { homedir } from 'os';
 import type {
   AuthProfile,
   CreateAuthProfileInput,
@@ -21,6 +24,10 @@ import {
   serializeEncryptedData,
   deserializeEncryptedData,
 } from '../security/crypto.js';
+
+// 기본 설정 디렉토리
+const DEFAULT_CONFIG_DIR = join(homedir(), '.doppelgesicht');
+const DEFAULT_PROFILES_FILE = join(DEFAULT_CONFIG_DIR, 'auth-profiles.enc');
 
 // 기본 Rate Limit 설정
 const DEFAULT_RATE_LIMIT: Omit<RateLimitConfig, 'currentMinuteCount' | 'currentDayCount' | 'lastRequestTime' | 'lastDayResetTime'> = {
@@ -468,5 +475,88 @@ export class AuthProfileManager {
    */
   clear(): void {
     this.profiles.clear();
+  }
+
+  /**
+   * 프로파일을 파일에 저장합니다
+   * @param filePath - 저장할 파일 경로 (기본값: ~/.doppelgesicht/auth-profiles.enc)
+   */
+  saveToFile(filePath: string = DEFAULT_PROFILES_FILE): void {
+    const key = this.ensureMasterKey();
+
+    // 저장할 데이터 구성
+    const profilesData = this.getAllProfiles().map(profile => ({
+      id: profile.id,
+      name: profile.name,
+      provider: profile.provider,
+      type: profile.type,
+      encryptedCredentials: profile.encryptedCredentials,
+      rateLimits: profile.rateLimits,
+      health: profile.health,
+      lastUsed: profile.lastUsed,
+      failCount: profile.failCount,
+      priority: profile.priority,
+      fallbackChain: profile.fallbackChain,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt,
+      isActive: profile.isActive,
+      metadata: profile.metadata,
+    }));
+
+    const data = {
+      version: 1,
+      count: profilesData.length,
+      profiles: profilesData,
+    };
+
+    // JSON 직렬화 및 암호화
+    const jsonString = JSON.stringify(data, null, 2);
+    const encrypted = encryptString(jsonString, key);
+    const serialized = serializeEncryptedData(encrypted);
+
+    // 디렉토리 생성
+    const configDir = dirname(filePath);
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+
+    // 파일 저장
+    writeFileSync(filePath, serialized, 'utf-8');
+  }
+
+  /**
+   * 프로파일을 파일에서 로드합니다
+   * @param filePath - 로드할 파일 경로 (기본값: ~/.doppelgesicht/auth-profiles.enc)
+   * @returns 로드 성공 여부
+   */
+  loadFromFile(filePath: string = DEFAULT_PROFILES_FILE): boolean {
+    if (!existsSync(filePath)) {
+      return false;
+    }
+
+    const key = this.ensureMasterKey();
+
+    try {
+      // 파일 읽기
+      const serialized = readFileSync(filePath, 'utf-8');
+      const encrypted = deserializeEncryptedData(serialized);
+      const jsonString = decryptToString(encrypted, key);
+      const data = JSON.parse(jsonString) as {
+        version: number;
+        count: number;
+        profiles: AuthProfile[];
+      };
+
+      // 프로파일 복원
+      this.profiles.clear();
+      for (const profile of data.profiles) {
+        this.profiles.set(profile.id, profile);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to load profiles:', error);
+      return false;
+    }
   }
 }
