@@ -148,7 +148,7 @@
 | **역할** | 터미널에서 직접 AI와 대화하고 도구 실행 |
 | **진입 경로** | 터미널에서 `doppelgesicht agent` 실행 |
 | **사용자 행동** | • 자연어 프롬프트 입력<br>• 도구 승인/거부 응답 (터미널 인터랙티브 UI)<br>• 대화 종료 명령 입력 |
-| **주요 기능** | • 프롬프트 입력 수신 (readline 인터페이스)<br>• LLM API 호출 (스트리밍 응답, 청크 단위 출력)<br>• 도구 호출 감지 (bash, channel, cli_runner)<br>• 위험도 평가 및 승인 UI 표시 (@clack/prompts)<br>• 도구 실행 및 결과 전달<br>• **[종료]** exit/quit 명령으로 종료 |
+| **주요 기능** | • 프롬프트 입력 수신 (readline 인터페이스)<br>• LLM API 호출 (스트리밍 응답, 청크 단위 출력)<br>• 도구 호출 감지 (exec, browser, channel_send)<br>• 위험도 평가 및 승인 UI 표시 (@clack/prompts)<br>• 도구 실행 및 결과 전달<br>• **[종료]** exit/quit 명령으로 종료 |
 | **에러 처리** | LLM 응답 스트림 중단 → 재시도 버튼 제공<br>도구 실행 실패 → 오류 메시지 AI에 전달<br>타임아웃 (60s) → 자동 거부 처리 |
 | **다음 이동** | 종료 → CLI로 복귀 |
 
@@ -191,9 +191,9 @@
 | 항목 | 내용 |
 |------|------|
 | **역할** | 위험한 도구 실행 전 사용자 승인 요청 |
-| **진입 경로** | AI가 bash, file_write 등 위험 도구 호출 시 자동 표시 |
+| **진입 경로** | AI가 exec, file_write 등 위험 도구 호출 시 자동 표시 |
 | **사용자 행동** | • 제안된 작업 검토<br>• 승인/거부/항상 허용 선택<br>• 타임아웃 내 응답 |
-| **주요 기능** | • **위험도 분류 및 평가:**<br>&nbsp;&nbsp;- Critical (빨강): exec, browser, file_write → 항상 승인 필요<br>&nbsp;&nbsp;- High (주황): file_read, web_fetch → 대부분 승인 필요<br>&nbsp;&nbsp;- Medium (노랑): web_search → 문맥 기반<br>&nbsp;&nbsp;- Low (초록): info → 자동 승인<br>• 색상 기반 위험 표시<br>• 실행 명령 평문 표시 (예: "bash rm -rf /dangerous/path")<br>• 승인 선택지 제공 (Yes/No/Always/Always Deny)<br>• 타임아웃: 기본 60초, 고위험 120초 (타임아웃 시 기본값: 거부)<br>• **실행 모드별 동작:**<br>&nbsp;&nbsp;- **CLI 포그라운드 모드**: 터미널 인터랙티브 UI (@clack/prompts)<br>&nbsp;&nbsp;- **Daemon 모드**: 화이트리스트 기반 자동 승인, 미등록 도구는 자동 거부<br>• **[응답]** 승인 시 실행, 거부 시 AI에 거부 알림 |
+| **주요 기능** | • **위험도 분류 및 평가:**<br>&nbsp;&nbsp;- Critical (빨강): exec, browser, file_write → 항상 승인 필요<br>&nbsp;&nbsp;- High (주황): file_read, web_fetch → 대부분 승인 필요<br>&nbsp;&nbsp;- Medium (노랑): web_search → 문맥 기반<br>&nbsp;&nbsp;- Low (초록): info → 자동 승인<br>• 색상 기반 위험 표시<br>• 실행 명령 평문 표시 (예: "exec rm -rf /dangerous/path")<br>• 승인 선택지 제공 (Yes/No/Always/Always Deny)<br>• 타임아웃: 기본 60초, 고위험 120초 (타임아웃 시 기본값: 거부)<br>• **실행 모드별 동작:**<br>&nbsp;&nbsp;- **CLI 포그라운드 모드**: 터미널 인터랙티브 UI (@clack/prompts)<br>&nbsp;&nbsp;- **Daemon 모드**: 화이트리스트 기반 자동 승인, 미등록 도구는 자동 거부<br>• **[응답]** 승인 시 실행, 거부 시 AI에 거부 알림 |
 | **에러 처리** | 승인 UI 표시 실패 → 자동 거부 (안전 기본값)<br>사용자 인터럽트 (Ctrl+C) → 실행 취소, AI에 알림 |
 | **다음 이동** | 승인 → 도구 실행 → 결과 AI 전달, 거부 → AI에 거부 알림 |
 
@@ -542,14 +542,16 @@ AI 어시스턴트가 실시간 데이터에 접근하고 외부 시스템과 �
 
 ### 지원 도구 목록
 
-| ID | 도구명 | 설명 | 위험도 | 승인 필요 | 사용 예시 |
-|----|--------|------|--------|-----------|-----------|
-| **T001** | bash | 터미널 명령어 실행 | High | 예 | `curl`로 API 호출, 파일 조작 |
-| **T002** | web_fetch | URL로 HTTP 요청 | Medium | 예 | 웹 페이지 콘텐츠 가져오기 |
-| **T003** | browser | Playwright 브라우저 자동화 | Critical | 예 | 동적 웹사이트 스크래핑 |
-| **T004** | file_read | 파일 읽기 | Medium | 예 | 로컬 파일 내용 확인 |
-| **T005** | file_write | 파일 쓰기 | Critical | 예 | 설정 파일 수정 |
-| **T006** | channel_send | 메신저로 메시지 전송 | Low | 아니오 | 다른 채널로 알림 전송 |
+| ID | 도구명 | 설명 | 위험도 | 승인 필요 | 사용 예시 | 구현 상태 |
+|----|--------|------|--------|-----------|-----------|-----------|
+| **T001** | exec | 터미널 명령어 실행 | Critical | 예 | `curl`로 API 호출, 파일 조작 | ✅ 완료 |
+| **T002** | web_fetch | URL로 HTTP 요청 | High | 예 | 웹 페이지 콘텐츠 가져오기 | ⚠️ 부분 구현 |
+| **T003** | browser | Playwright 브라우저 자동화 | Critical | 예 | 동적 웹사이트 스크래핑 | ✅ 완료 |
+| **T004** | file_read | 파일 읽기 | High | 예 | 로컬 파일 내용 확인 | ⚠️ 부분 구현 |
+| **T005** | file_write | 파일 쓰기 | Critical | 예 | 설정 파일 수정 | ❌ 미구현 |
+| **T006** | channel_send | 메신저로 메시지 전송 | Medium | 예 | 다른 채널로 알림 전송 | ✅ 완료 |
+
+**참고**: PRD와 코드 간 도구명 통일을 위해 `bash`를 `exec`로 변경했습니다. 코드베이스에서는 `exec`로 구현되어 있습니다.
 
 ### 도구 정의 스키마
 
@@ -557,7 +559,7 @@ AI 어시스턴트가 실시간 데이터에 접근하고 외부 시스템과 �
 interface ToolDefinition {
   type: 'function';
   function: {
-    name: string;           // 도구 식별자 (예: "bash")
+    name: string;           // 도구 식별자 (예: "exec")
     description: string;    // 도구 설명 및 사용 시기
     parameters: {
       type: 'object';
@@ -576,14 +578,14 @@ interface ToolDefinition {
 
 ### 도구 정의 예시
 
-#### bash (T001)
+#### exec (T001)
 
 ```typescript
 {
   type: 'function',
   function: {
-    name: 'bash',
-    description: `Execute bash commands. Use for:
+    name: 'exec',
+    description: `Execute shell commands. Use for:
 - Running scripts
 - File operations (ls, cat, grep)
 - Network requests (curl, wget)
@@ -593,7 +595,7 @@ interface ToolDefinition {
       properties: {
         command: {
           type: 'string',
-          description: 'The bash command to execute'
+          description: 'The shell command to execute'
         },
         timeout: {
           type: 'number',
@@ -607,6 +609,19 @@ interface ToolDefinition {
       required: ['command']
     }
   }
+}
+```
+
+**실행 결과 스키마:**
+```typescript
+interface ExecToolResult {
+  command: string;      // 실행된 명령어
+  stdout: string;       // 표준 출력
+  stderr: string;       // 표준 에러
+  exitCode: number;     // 종료 코드 (0=성공)
+  duration: number;     // 실행 시간 (ms)
+  timedOut: boolean;    // 타임아웃 여부
+  finishedAt: Date;     // 종료 시간
 }
 ```
 
@@ -648,7 +663,20 @@ interface ToolDefinition {
 }
 ```
 
+**실행 결과 스키마:**
+```typescript
+interface WebFetchToolResult {
+  status: number;       // HTTP 상태 코드
+  headers: Record<string, string>;  // 응답 헤더
+  body: string;         // 응답 본문
+  duration: number;     // 실행 시간 (ms)
+  url: string;          // 최종 URL (리다이렉트 후)
+}
+```
+
 ### 도구 실행 흐름 (Tool Call Loop)
+
+**핵심 개념**: Tool Call Loop는 LLM이 도구를 반복적으로 호출할 수 있는 구조입니다. 한 번의 도구 실행 결과를 받아 다시 LLM에 전달하면, LLM은 추가 도구 호출이 필요한지 판단합니다. 이 과정이 반복되어 최종 응답이 생성됩니다.
 
 ```typescript
 async function executeWithTools(
@@ -656,13 +684,21 @@ async function executeWithTools(
   messages: ChatMessage[],
   tools: ToolDefinition[]
 ): Promise<string> {
-  const maxIterations = 10;
+  const maxIterations = 10;  // 최대 반복 횟수 제한
   let iterations = 0;
+  const startTime = Date.now();
+  const maxTotalDuration = 5 * 60 * 1000;  // 총 실행 시간 제한: 5분
 
+  // 반복 호출 루프 (while loop)
   while (iterations < maxIterations) {
     iterations++;
 
-    // 1. LLM 호출
+    // 총 실행 시간 체크
+    if (Date.now() - startTime > maxTotalDuration) {
+      throw new Error('Total execution time exceeded 5 minutes');
+    }
+
+    // 1. LLM 호출 (도구 목록 전달)
     const response = await client.complete({
       model: 'moonshot-v1-8k',
       messages,
@@ -672,16 +708,17 @@ async function executeWithTools(
 
     const message = response.message;
 
-    // 2. 도구 호출이 없으면 최종 응답
+    // 2. 도구 호출이 없으면 최종 응답 반환
     if (!message.tool_calls || message.tool_calls.length === 0) {
       return message.content;
     }
 
-    // 3. 도구 호출 처리
-    messages.push(message); // assistant 메시지 추가
+    // 3. Assistant 메시지 추가 (도구 호출 정보 포함)
+    messages.push(message);
 
+    // 4. 각 도구 호출 처리
     for (const toolCall of message.tool_calls) {
-      // 승인 확인 (위험도에 따라)
+      // 4a. 승인 확인 (위험도에 따라)
       const approved = await requestApproval(toolCall);
 
       if (!approved) {
@@ -693,20 +730,43 @@ async function executeWithTools(
         continue;
       }
 
-      // 도구 실행
+      // 4b. 도구 실행
       const result = await executeTool(toolCall);
 
-      // 결과 추가
+      // 4c. 도구 결과를 메시지에 추가 (LLM이 다음 판단에 사용)
       messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,
         content: JSON.stringify(result)
       });
     }
+
+    // 5. while 루프 반복: 도구 결과를 받아 다시 LLM 호출
+    // LLM이 추가 도구 호출이 필요한지 또는 최종 응답을 생성할지 결정
   }
 
   throw new Error('Maximum tool call iterations exceeded');
 }
+```
+
+**반복 호출 흐름 다이어그램:**
+
+```
+사용자 입력
+    ↓
+[while 루프 시작]
+    ↓
+LLM 호출 ←──────────────────────┐
+    ↓                           │
+도구 호출 필요? ──아니오──→ 최종 응답 반환
+    │ (예)                      │
+    ↓                           │
+승인 확인                        │
+    ↓                           │
+도구 실행                        │
+    ↓                           │
+결과를 messages에 추가            │
+    └───────────────────────────┘
 ```
 
 ### 메시지 흐름 예시
@@ -755,13 +815,18 @@ finalResponse: '현재 강동구는 맑고 기온은 15도, 습도는 45%입니�
 
 ### 도구 실행 제한
 
-| 제한 항목 | 값 | 설명 |
-|-----------|-----|------|
-| 최대 반복 횟수 | 10 | 무한 루프 방지 |
-| 단일 도구 타임아웃 | 30초 | bash, web_fetch |
-| 브라우저 타임아웃 | 60초 | browser 도구 |
-| 최대 총 실행 시간 | 5분 | 전체 흐름 제한 |
-| 출력 크기 제한 | 1MB | 과도한 데이터 방지 |
+| 제한 항목 | 값 | 설명 | 구현 상태 |
+|-----------|-----|------|-----------|
+| 최대 반복 횟수 | 10회 | 무한 루프 방지 | ❌ 미구현 |
+| 단일 도구 타임아웃 | 30초 | exec, web_fetch | ✅ 구현됨 |
+| 브라우저 타임아웃 | 60초 | browser 도구 | ✅ 구현됨 |
+| 총 실행 시간 제한 | 5분 | 전체 흐름 제한 | ❌ 미구현 |
+| 출력 크기 제한 | 1MB | 과도한 데이터 방지 | ⚠️ 부분 구현 (Bash만) |
+
+**구현 필요 사항:**
+- `maxIterations` 카운터를 통한 반복 횟수 제한
+- `startTime` 기반 총 실행 시간 체크
+- 모든 도구에 대한 출력 크기 제한 적용
 
 ### 에러 처리
 
@@ -772,25 +837,126 @@ finalResponse: '현재 강동구는 맑고 기온은 15도, 습도는 45%입니�
 | 승인 거부 | 거부 사유 전달 | `error: "User denied tool execution"` |
 | 출력 초과 | truncated 표시 | `output: "...(truncated)"` |
 
+
+### 도구 실행 결과 스키마
+
+각 도구별 실행 결과는 다음과 같은 스키마를 따릅니다:
+
+#### exec 결과
+```typescript
+interface ExecToolResult {
+  command: string;      // 실행된 명령어
+  stdout: string;       // 표준 출력
+  stderr: string;       // 표준 에러
+  exitCode: number;     // 종료 코드 (0=성공)
+  duration: number;     // 실행 시간 (ms)
+  timedOut: boolean;    // 타임아웃 여부
+  finishedAt: Date;     // 종료 시간
+}
+```
+
+#### web_fetch 결과
+```typescript
+interface WebFetchToolResult {
+  status: number;                   // HTTP 상태 코드
+  headers: Record<string, string>;  // 응답 헤더
+  body: string;                     // 응답 본문
+  duration: number;                 // 실행 시간 (ms)
+  url: string;                      // 최종 URL (리다이렉트 후)
+}
+```
+
+#### browser 결과
+```typescript
+interface BrowserToolResult {
+  success: boolean;                 // 실행 성공 여부
+  url?: string;                     // 페이지 URL
+  title?: string;                   // 페이지 제목
+  consoleLogs: BrowserConsoleLog[]; // 콘솔 로그
+  screenshot?: string;              // 스크린샷 (base64)
+  duration: number;                 // 실행 시간 (ms)
+}
+
+interface BrowserConsoleLog {
+  type: 'log' | 'error' | 'warn' | 'info' | 'debug';
+  message: string;
+  timestamp: Date;
+}
+```
+
+#### file_read 결과
+```typescript
+interface FileReadToolResult {
+  content: string;      // 파일 내용
+  size: number;         // 파일 크기 (bytes)
+  encoding: string;     // 인코딩 (utf-8 등)
+  path: string;         // 파일 경로
+}
+```
+
+#### file_write 결과
+```typescript
+interface FileWriteToolResult {
+  success: boolean;     // 쓰기 성공 여부
+  bytesWritten: number; // 쓰인 바이트 수
+  path: string;         // 파일 경로
+}
+```
+
+### 도구 실행 로깅
+
+보안 감사 및 디버깅을 위해 모든 도구 실행은 로그로 기록됩니다.
+
+#### 로그 항목
+```typescript
+interface ToolExecutionLog {
+  timestamp: Date;              // 실행 시간
+  toolName: string;             // 도구 이름
+  params: Record<string, unknown>;  // 실행 파라미터
+  result: ToolResult;           // 실행 결과
+  approvalStatus: 'approved' | 'rejected' | 'auto';  // 승인 상태
+  sessionId?: string;           // 세션 ID
+  userId?: string;              // 사용자 ID
+  duration: number;             // 실행 시간 (ms)
+  riskLevel: RiskLevel;         // 위험도
+}
+```
+
+#### 로그 저장 위치
+- **개발 환경**: 콘솔 출력 + 파일 (`~/.doppelgesicht/logs/tools.log`)
+- **운영 환경**: Supabase `tool_execution_logs` 테이블
+
+#### 로그 활용
+- 보안 감사: 민감한 작업 추적
+- 디버깅: 실행 실패 원인 분석
+- 사용 통계: 도구 사용 패턴 분석
+
 ### 보안 고려사항
 
-1. **명령어 검증**: bash 도구 실행 전 위험 패턴 체크
+1. **명령어 검증**: exec 도구 실행 전 위험 패턴 체크
 2. **네트워크 제한**: 내부 네트워크 접근 제한 (10.0.0.0/8, 172.16.0.0/12 등)
 3. **파일 시스템 격리**: 홈 디렉토리 외 접근 제한
 4. **승인 화이트리스트**: 자주 사용하는 안전한 명령어 자동 승인
+5. **실행 로깅**: 모든 도구 실행 기록 저장 (보안 감사용)
 
 ### 구현 체크리스트
 
-- [ ] ToolDefinition 타입 정의
-- [ ] 도구 레지스트리 구현
-- [ ] LLM 호출 시 tools 파라미터 전달
-- [ ] tool_calls 응답 파싱
-- [ ] 도구 실행 엔진 (bash, web_fetch, browser)
-- [ ] 승인 시스템 연동
-- [ ] tool_result 메시지 구성
+- [x] ToolDefinition 타입 정의
+- [x] 도구 레지스트리 구현
+- [x] LLM 호출 시 tools 파라미터 전달
+- [x] tool_calls 응답 파싱
+- [x] 도구 실행 엔진 (exec, browser)
+- [x] 승인 시스템 연동
+- [x] tool_result 메시지 구성
 - [ ] 반복 호출 루프 구현
-- [ ] 타임아웃 및 에러 처리
+- [x] 타임아웃 및 에러 처리
 - [ ] 최대 반복 횟수 제한
+- [ ] 총 실행 시간 제한 (5분)
+- [ ] 출력 크기 제한 (1MB) - 모든 도구에 적용
+- [ ] 도구 실행 로깅 시스템
+- [ ] web_fetch 도구 구현
+- [ ] file_read 도구 구현
+- [ ] file_write 도구 구현
 
 ### 참고: OpenAI/Moonshot Tools API
 
