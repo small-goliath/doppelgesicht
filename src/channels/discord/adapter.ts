@@ -3,7 +3,7 @@
  * @description discord.js 14.x 기반 Discord Bot 구현
  */
 
-import { Client, GatewayIntentBits, Events, Partials, ActivityType, type TextChannel } from 'discord.js';
+import { Client, GatewayIntentBits, Events, Partials, ActivityType } from 'discord.js';
 import type {
   DiscordConfig,
   DiscordIncomingMessage,
@@ -184,7 +184,7 @@ export class DiscordAdapter implements IChannelAdapter {
         throw new Error(`Channel not found: ${channelId}`);
       }
 
-      if (!channel.isTextBased() || channel.isDMBased()) {
+      if (!channel.isTextBased()) {
         throw new Error(`Channel is not text-based: ${channelId}`);
       }
 
@@ -220,7 +220,9 @@ export class DiscordAdapter implements IChannelAdapter {
         messageOptions.tts = message.tts;
       }
 
-      await (channel as TextChannel).send(messageOptions);
+      // TextBased 채널에 메시지 전송 (TextChannel, DMChannel 등)
+      // send 메서드가 있는 채널 타입으로 캐스팅
+      await (channel as import('discord.js').TextChannel | import('discord.js').DMChannel | import('discord.js').NewsChannel | import('discord.js').ThreadChannel).send(messageOptions);
 
       this.logger.debug('Message sent successfully');
     } catch (error) {
@@ -321,16 +323,34 @@ export class DiscordAdapter implements IChannelAdapter {
     // 봇 메시지 무시
     if (message.author.bot) return;
 
+    // 메시지 수신 로그
+    // eslint-disable-next-line no-console
+    console.log(`[DISCORD] Message received: "${message.content.substring(0, 50)}" from ${message.author.username} (${message.author.id})`);
+    this.logger.info(`[DISCORD] Message received from ${message.author.username}`);
+
     const userId = message.author.id;
     const channelId = message.channelId;
     const guildId = message.guildId || undefined;
 
+    // eslint-disable-next-line no-console
+    console.log(`[DISCORD] Whitelist check: userId=${userId}, channelId=${channelId}, guildId=${guildId}`);
+    // eslint-disable-next-line no-console
+    console.log(`[DISCORD] Config allowedUsers:`, this.config.allowedUsers);
+    // eslint-disable-next-line no-console
+    console.log(`[DISCORD] Config allowedGuilds:`, this.config.allowedGuilds);
+
     // 화이트리스트 검사
     if (this.config.allowedUsers && this.config.allowedUsers.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[DISCORD] Checking allowedUsers: ${userId} in [${this.config.allowedUsers.join(', ')}]`);
       if (!this.config.allowedUsers.includes(userId)) {
+        // eslint-disable-next-line no-console
+        console.log(`[DISCORD] BLOCKED: User ${userId} not in allowedUsers`);
         this.logger.warn(`Message from unauthorized user: ${userId} (${message.author.username})`);
         return;
       }
+      // eslint-disable-next-line no-console
+      console.log(`[DISCORD] User ${userId} passed allowedUsers check`);
     }
 
     // 채널 화이트리스트 검사
@@ -432,12 +452,21 @@ export class DiscordAdapter implements IChannelAdapter {
     });
 
     // 핸들러 호출
+    // eslint-disable-next-line no-console
+    console.log(`[DISCORD] Calling message handler, handler exists: ${!!this.messageHandler}`);
     if (this.messageHandler) {
       try {
         await this.messageHandler(incomingMessage);
+        // eslint-disable-next-line no-console
+        console.log('[DISCORD] Message handler completed');
       } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('[DISCORD] Message handler error:', (error as Error).message);
         this.logger.error('Message handler error', error as Error);
       }
+    } else {
+      // eslint-disable-next-line no-console
+      console.log('[DISCORD] No message handler registered!');
     }
   }
 }
