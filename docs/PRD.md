@@ -507,3 +507,327 @@ interface EncryptedAuthProfile {
 | 14.8 위협 모델 | ✅ | 보안 상세 섹션 참고 |
 
 **누락된 항목**: 없음 (모든 핵심 내용이 MVP 또는 MVP 이후 기능으로 분류됨)
+
+---
+
+## 🛠️ 도구 통합 시스템 (Tool Integration)
+
+### 개요
+
+AI 어시스턴트가 실시간 데이터에 접근하고 외부 시스템과 상호작용하기 위한 도구 시스템. LLM이 자연어 요청을 분석하여 적절한 도구를 호출하고, 실행 결과를 바탕으로 최종 응답을 생성하는 구조.
+
+### 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Tool Integration Flow                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. 사용자 메시지 수신                                        │
+│     ↓                                                        │
+│  2. LLM에 도구 목록 전달 + 사용자 메시지                      │
+│     ↓                                                        │
+│  3. LLM이 도구 호출 결정 (tool_use)                          │
+│     ↓                                                        │
+│  4. 도구 실행 (승인 필요 시 UI 표시)                         │
+│     ↓                                                        │
+│  5. 실행 결과를 LLM에 전달 (tool_result)                     │
+│     ↓                                                        │
+│  6. LLM이 최종 응답 생성                                     │
+│     ↓                                                        │
+│  7. 사용자에게 응답 전송                                     │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 지원 도구 목록
+
+| ID | 도구명 | 설명 | 위험도 | 승인 필요 | 사용 예시 |
+|----|--------|------|--------|-----------|-----------|
+| **T001** | bash | 터미널 명령어 실행 | High | 예 | `curl`로 API 호출, 파일 조작 |
+| **T002** | web_fetch | URL로 HTTP 요청 | Medium | 예 | 웹 페이지 콘텐츠 가져오기 |
+| **T003** | browser | Playwright 브라우저 자동화 | Critical | 예 | 동적 웹사이트 스크래핑 |
+| **T004** | file_read | 파일 읽기 | Medium | 예 | 로컬 파일 내용 확인 |
+| **T005** | file_write | 파일 쓰기 | Critical | 예 | 설정 파일 수정 |
+| **T006** | channel_send | 메신저로 메시지 전송 | Low | 아니오 | 다른 채널로 알림 전송 |
+
+### 도구 정의 스키마
+
+```typescript
+interface ToolDefinition {
+  type: 'function';
+  function: {
+    name: string;           // 도구 식별자 (예: "bash")
+    description: string;    // 도구 설명 및 사용 시기
+    parameters: {
+      type: 'object';
+      properties: {
+        [paramName: string]: {
+          type: string;     // string, number, boolean, array, object
+          description: string;
+          enum?: string[];  // 선택적 값 목록
+        };
+      };
+      required: string[];   // 필수 파라미터 목록
+    };
+  };
+}
+```
+
+### 도구 정의 예시
+
+#### bash (T001)
+
+```typescript
+{
+  type: 'function',
+  function: {
+    name: 'bash',
+    description: `Execute bash commands. Use for:
+- Running scripts
+- File operations (ls, cat, grep)
+- Network requests (curl, wget)
+- System information (date, uname)`,
+    parameters: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description: 'The bash command to execute'
+        },
+        timeout: {
+          type: 'number',
+          description: 'Timeout in milliseconds (default: 30000)'
+        },
+        cwd: {
+          type: 'string',
+          description: 'Working directory for command execution'
+        }
+      },
+      required: ['command']
+    }
+  }
+}
+```
+
+#### web_fetch (T002)
+
+```typescript
+{
+  type: 'function',
+  function: {
+    name: 'web_fetch',
+    description: `Fetch content from a URL. Use for:
+- Retrieving web page HTML
+- API calls (REST, GraphQL)
+- Downloading data`,
+    parameters: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'URL to fetch'
+        },
+        method: {
+          type: 'string',
+          enum: ['GET', 'POST', 'PUT', 'DELETE'],
+          description: 'HTTP method'
+        },
+        headers: {
+          type: 'object',
+          description: 'HTTP headers'
+        },
+        body: {
+          type: 'string',
+          description: 'Request body (for POST/PUT)'
+        }
+      },
+      required: ['url']
+    }
+  }
+}
+```
+
+### 도구 실행 흐름 (Tool Call Loop)
+
+```typescript
+async function executeWithTools(
+  client: ILLMClient,
+  messages: ChatMessage[],
+  tools: ToolDefinition[]
+): Promise<string> {
+  const maxIterations = 10;
+  let iterations = 0;
+
+  while (iterations < maxIterations) {
+    iterations++;
+
+    // 1. LLM 호출
+    const response = await client.complete({
+      model: 'moonshot-v1-8k',
+      messages,
+      tools,
+      max_tokens: 4096
+    });
+
+    const message = response.message;
+
+    // 2. 도구 호출이 없으면 최종 응답
+    if (!message.tool_calls || message.tool_calls.length === 0) {
+      return message.content;
+    }
+
+    // 3. 도구 호출 처리
+    messages.push(message); // assistant 메시지 추가
+
+    for (const toolCall of message.tool_calls) {
+      // 승인 확인 (위험도에 따라)
+      const approved = await requestApproval(toolCall);
+
+      if (!approved) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: 'Tool execution was denied by user'
+        });
+        continue;
+      }
+
+      // 도구 실행
+      const result = await executeTool(toolCall);
+
+      // 결과 추가
+      messages.push({
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(result)
+      });
+    }
+  }
+
+  throw new Error('Maximum tool call iterations exceeded');
+}
+```
+
+### 메시지 흐름 예시
+
+**사용자**: "강동구 날씨 알려줘"
+
+```typescript
+// 1. 초기 메시지
+messages = [
+  { role: 'user', content: '강동구 날씨 알려줘' }
+];
+
+// 2. LLM 첫 응답 - 도구 호출
+tool_calls: [
+  {
+    id: 'call_123',
+    type: 'function',
+    function: {
+      name: 'web_fetch',
+      arguments: JSON.stringify({
+        url: 'https://api.openweathermap.org/data/2.5/weather?q=Gangdong-gu,Seoul&appid=...',
+        method: 'GET'
+      })
+    }
+  }
+];
+
+// 3. messages 업데이트
+messages = [
+  { role: 'user', content: '강동구 날씨 알려줘' },
+  { role: 'assistant', content: '', tool_calls: [...] },
+  {
+    role: 'tool',
+    tool_call_id: 'call_123',
+    content: JSON.stringify({
+      temp: 15,
+      weather: 'Clear',
+      humidity: 45
+    })
+  }
+];
+
+// 4. LLM 최종 응답
+finalResponse: '현재 강동구는 맑고 기온은 15도, 습도는 45%입니다.';
+```
+
+### 도구 실행 제한
+
+| 제한 항목 | 값 | 설명 |
+|-----------|-----|------|
+| 최대 반복 횟수 | 10 | 무한 루프 방지 |
+| 단일 도구 타임아웃 | 30초 | bash, web_fetch |
+| 브라우저 타임아웃 | 60초 | browser 도구 |
+| 최대 총 실행 시간 | 5분 | 전체 흐름 제한 |
+| 출력 크기 제한 | 1MB | 과도한 데이터 방지 |
+
+### 에러 처리
+
+| 시나리오 | 처리 방안 | LLM 전달 내용 |
+|----------|-----------|---------------|
+| 도구 실행 실패 | 에러 메시지 전달 | `error: "Command failed: ..."` |
+| 타임아웃 | 타임아웃 알림 | `error: "Tool execution timed out"` |
+| 승인 거부 | 거부 사유 전달 | `error: "User denied tool execution"` |
+| 출력 초과 | truncated 표시 | `output: "...(truncated)"` |
+
+### 보안 고려사항
+
+1. **명령어 검증**: bash 도구 실행 전 위험 패턴 체크
+2. **네트워크 제한**: 내부 네트워크 접근 제한 (10.0.0.0/8, 172.16.0.0/12 등)
+3. **파일 시스템 격리**: 홈 디렉토리 외 접근 제한
+4. **승인 화이트리스트**: 자주 사용하는 안전한 명령어 자동 승인
+
+### 구현 체크리스트
+
+- [ ] ToolDefinition 타입 정의
+- [ ] 도구 레지스트리 구현
+- [ ] LLM 호출 시 tools 파라미터 전달
+- [ ] tool_calls 응답 파싱
+- [ ] 도구 실행 엔진 (bash, web_fetch, browser)
+- [ ] 승인 시스템 연동
+- [ ] tool_result 메시지 구성
+- [ ] 반복 호출 루프 구현
+- [ ] 타임아웃 및 에러 처리
+- [ ] 최대 반복 횟수 제한
+
+### 참고: OpenAI/Moonshot Tools API
+
+```typescript
+// 요청
+{
+  model: 'moonshot-v1-8k',
+  messages: [...],
+  tools: [
+    {
+      type: 'function',
+      function: {
+        name: 'get_weather',
+        description: 'Get weather for a location',
+        parameters: { ... }
+      }
+    }
+  ],
+  tool_choice: 'auto'  // 'auto' | 'none' | { type: 'function', function: { name: '...' } }
+}
+
+// 응답 (tool_calls)
+{
+  id: 'chatcmpl-...',
+  choices: [{
+    message: {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{
+        id: 'call_...',
+        type: 'function',
+        function: {
+          name: 'get_weather',
+          arguments: '{"location": "Seoul"}'
+        }
+      }]
+    }
+  }]
+}
+```
