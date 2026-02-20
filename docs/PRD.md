@@ -947,8 +947,9 @@ interface ToolExecutionLog {
 - [x] 도구 레지스트리 구현
 - [x] LLM 호출 시 tools 파라미터 전달
 - [x] tool_calls 응답 파싱
-- [x] 도구 실행 엔진 (exec, browser)
-- [x] 승인 시스템 연동
+- [x] 도구 실행 엔진 (exec)
+- [ ] browser 도구 구현
+- [ ] 승인 시스템 연동 (requestApproval)
 - [x] tool_result 메시지 구성
 - [x] 반복 호출 루프 구현
 - [x] 타임아웃 및 에러 처리
