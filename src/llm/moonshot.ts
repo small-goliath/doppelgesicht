@@ -20,7 +20,7 @@ import type { ILogger } from '../logging/index.js';
 /**
  * Moonshot API 기본 URL
  */
-const MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1';
+const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 
 /**
  * 기본 지원 모델 목록
@@ -204,6 +204,11 @@ export class MoonshotClient implements ILLMClient {
   async healthCheck(): Promise<HealthStatus> {
     const startTime = Date.now();
 
+    this.logger.debug('Health check started', {
+      baseURL: this.config.baseURL || MOONSHOT_BASE_URL,
+      apiKeyPrefix: this.config.apiKey?.substring(0, 10) + '...'
+    });
+
     try {
       // 모델 목록 API로 상태 확인
       await this.client.models.list();
@@ -236,9 +241,14 @@ export class MoonshotClient implements ILLMClient {
     try {
       const models = await this.client.models.list();
       const moonshotModels = models.data
-        .filter(m => m.id.includes('moonshot'))
+        .filter(m => m.id.includes('moonshot') || m.id.includes('kimi'))
         .map(m => m.id)
         .sort();
+
+      this.logger.debug('Fetched models from Moonshot API', {
+        count: moonshotModels.length,
+        models: moonshotModels,
+      });
 
       // API에서 모델을 가져오지 못하면 기본 모델 목록 반환
       return moonshotModels.length > 0 ? moonshotModels : DEFAULT_MODELS;
@@ -251,17 +261,26 @@ export class MoonshotClient implements ILLMClient {
 
   /**
    * API 키 검증
+   * Moonshot API는 간단한 chat completion으로 키를 검증합니다
    */
   async validateKey(): Promise<boolean> {
     try {
-      // 모델 목록 API로 키 검증
-      await this.client.models.list();
+      // 간단한 chat completion으로 키 검증
+      await this.client.chat.completions.create({
+        model: 'moonshot-v1-8k',
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 1,
+      });
       return true;
     } catch (error) {
       // 401 에러는 키가 유효하지 않음을 의미
-      // instanceof 대신 속성 확인 사용 (테스트 환경 호환성)
-      const apiError = error as { status?: number; name?: string };
-      if (apiError.status === 401) {
+      const apiError = error as { status?: number; code?: string; message?: string };
+      this.logger.debug('API key validation failed', {
+        status: apiError.status,
+        code: apiError.code,
+        message: apiError.message,
+      });
+      if (apiError.status === 401 || apiError.code === 'invalid_api_key') {
         return false;
       }
       // 다른 에러는 네트워크 등의 문제이므로 true 반환 (키 자체는 유효할 수 있음)
