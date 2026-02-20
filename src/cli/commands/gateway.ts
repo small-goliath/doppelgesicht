@@ -16,7 +16,7 @@ import { AnthropicClient } from '../../llm/anthropic.js';
 import { OpenAIClient } from '../../llm/openai.js';
 import { MoonshotClient } from '../../llm/moonshot.js';
 import { AuthProfileManager } from '../../core/auth-profile.js';
-import type { ToolDefinition, ILLMClient } from '../../llm/types.js';
+import type { ToolDefinition, ILLMClient, ChatMessage } from '../../llm/types.js';
 import type { IChannelAdapter } from '../../channels/types.js';
 import type { ILogger } from '../../logging/index.js';
 // recoverMasterKey는 onboard.ts에서 가져오지 않고 남부 구현
@@ -638,7 +638,7 @@ class GatewayCLI {
     logger: ILogger
   ): Promise<string> {
     const tools = this.getToolDefinitions();
-    const messages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string; tool_call_id?: string; name?: string }> = [
+    const messages: ChatMessage[] = [
       {
         role: 'system',
         content: `You are a helpful AI assistant with access to real-time data through tools. Current date: ${new Date().toISOString()}. Use tools when you need current information.`,
@@ -680,10 +680,11 @@ class GatewayCLI {
         return assistantMessage.content;
       }
 
-      // 어시스턴트 메시지 추가
+      // 어시스턴트 메시지 추가 (tool_calls 포함 필수)
       messages.push({
         role: 'assistant',
         content: assistantMessage.content || '',
+        tool_calls: assistantMessage.tool_calls,
       });
 
       // 각 도구 호출 실행
